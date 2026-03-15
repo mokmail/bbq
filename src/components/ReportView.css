@@ -209,6 +209,54 @@
   margin-top: 4px;
 }
 
+.report-risk-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.report-risk-card {
+  padding: 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: #ffffff;
+  display: grid;
+  gap: 6px;
+}
+
+.report-risk-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #64748b;
+}
+
+.report-risk-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.report-risk-meta {
+  font-size: 12px;
+  color: #475569;
+}
+
+.report-risk-card.risk-low {
+  border-color: rgba(22, 163, 74, 0.3);
+  background: rgba(220, 252, 231, 0.6);
+}
+
+.report-risk-card.risk-moderate {
+  border-color: rgba(217, 119, 6, 0.3);
+  background: rgba(254, 243, 199, 0.7);
+}
+
+.report-risk-card.risk-high {
+  border-color: rgba(220, 38, 38, 0.3);
+  background: rgba(254, 226, 226, 0.7);
+}
+
 .report-ai-text {
   font-size: 13px;
   color: #334155;
@@ -245,6 +293,13 @@
 
 .report-table tbody tr:hover {
   background: rgba(14, 165, 233, 0.08);
+}
+
+.report-chart-shell {
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 12px;
+  padding: 12px;
+  background: #ffffff;
 }
 
 .risk-low {

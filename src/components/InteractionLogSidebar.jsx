@@ -161,7 +161,7 @@ Response: ${i.responseText}
               {interactions.length === 0 ? 'No interactions yet' : 'No matching interactions'}
             </div>
           ) : (
-            filteredInteractions.map((interaction, index) => {
+            filteredInteractions.map((interaction) => {
               const itemId = `${interaction.questionId}-${interaction.timestamp}`;
               const isExpanded = expandedItems[itemId];
               const isCurrent = currentInteraction && currentInteraction.questionId === interaction.questionId;

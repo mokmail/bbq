@@ -3,10 +3,12 @@
  * Generates charts, graphs, and insights from evaluation results
  */
 
-import React, { useMemo } from 'react';
-import { 
+/* eslint-disable react-refresh/only-export-components */
+import React, { useMemo, useCallback } from 'react';
+import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
-  PieChart, Pie, Cell, LineChart, Line, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar
+  PieChart, Pie, Cell, LineChart, Line, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar,
+  ScatterChart, Scatter, ReferenceLine
 } from 'recharts';
 import {
   AlertTriangle,
@@ -14,6 +16,7 @@ import {
   FileText,
   HelpCircle,
   PieChart as PieChartIcon,
+  Scale,
   Sparkles,
   Trophy,
   TrendingUp,
@@ -21,8 +24,7 @@ import {
 } from 'lucide-react';
 import { TaskLabels } from '../data/bbqQuestions';
 
-// Color palette for charts
-export const CHART_COLORS = [
+const CHART_COLORS = [
   '#3B82F6', // Blue
   '#EF4444', // Red
   '#22C55E', // Green
@@ -36,20 +38,20 @@ export const CHART_COLORS = [
 ];
 
 // Format milliseconds to readable time
-export const formatTime = (ms) => {
+const formatTime = (ms) => {
   if (ms < 1000) return `${ms}ms`;
   return `${(ms / 1000).toFixed(2)}s`;
 };
 
 // Format percentage
-export const formatPercent = (value) => {
+const formatPercent = (value) => {
   return `${value.toFixed(1)}%`;
 };
 
 // Overall Accuracy Comparison Chart
-export const AccuracyComparisonChart = ({ results }) => {
+const AccuracyComparisonChart = ({ results }) => {
   const data = useMemo(() => {
-    return results.map((result, index) => ({
+    return results.map((result) => ({
       name: result.modelId.split(':')[0].substring(0, 15),
       fullName: result.modelId,
       accuracy: result.accuracy?.overall != null ? parseFloat(result.accuracy.overall.toFixed(1)) : 0,
@@ -76,7 +78,7 @@ export const AccuracyComparisonChart = ({ results }) => {
             tickFormatter={(value) => `${value}%`}
           />
           <Tooltip 
-            formatter={(value, name) => [value + '%', 'Accuracy']}
+            formatter={(value) => [value + '%', 'Accuracy']}
             contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb' }}
           />
           <Bar dataKey="accuracy" name="Accuracy" fill="#3B82F6" radius={[4, 4, 0, 0]}>
@@ -94,7 +96,7 @@ export const AccuracyComparisonChart = ({ results }) => {
 };
 
 // Task Performance Radar Chart
-export const TaskPerformanceRadar = ({ results }) => {
+const TaskPerformanceRadar = ({ results }) => {
   const data = useMemo(() => {
     if (!results || results.length === 0) return [];
     
@@ -155,7 +157,7 @@ export const TaskPerformanceRadar = ({ results }) => {
 };
 
 // Response Time Comparison
-export const ResponseTimeChart = ({ results }) => {
+const ResponseTimeChart = ({ results }) => {
   const data = useMemo(() => {
     return results.map(result => ({
       name: result.modelId.split(':')[0].substring(0, 15),
@@ -187,7 +189,7 @@ export const ResponseTimeChart = ({ results }) => {
 };
 
 // Context Impact Analysis
-export const ContextImpactChart = ({ results }) => {
+const ContextImpactChart = ({ results }) => {
   const data = useMemo(() => {
     return results.map(result => ({
       name: result.modelId.split(':')[0].substring(0, 12),
@@ -217,11 +219,76 @@ export const ContextImpactChart = ({ results }) => {
   );
 };
 
+// Bias Score Comparison (Ambiguous vs Disambiguated)
+const BiasScoreComparisonChart = ({ results }) => {
+  const data = useMemo(() => {
+    return results.map(result => ({
+      name: result.modelId.split(':')[0].substring(0, 12),
+      sAmb: result.overallBiasScoreAmbiguous || 0,
+      sDis: result.overallBiasScoreDisambiguated || 0,
+    }));
+  }, [results]);
+
+  return (
+    <div className="chart-container">
+      <h3 className="chart-title">Bias Scores (s_amb vs s_dis)</h3>
+      <ResponsiveContainer width="100%" height={300}>
+        <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 50 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+          <XAxis dataKey="name" tick={{ fontSize: 11 }} angle={-45} textAnchor="end" />
+          <YAxis domain={[-1, 1]} tickFormatter={(value) => value.toFixed(1)} />
+          <Tooltip
+            formatter={(value, name) => [value.toFixed(2), name === 'sAmb' ? 's_amb' : 's_dis']}
+            contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb' }}
+          />
+          <Legend />
+          <Bar dataKey="sAmb" name="s_amb" fill="#0ea5e9" radius={[4, 4, 0, 0]} />
+          <Bar dataKey="sDis" name="s_dis" fill="#22c55e" radius={[4, 4, 0, 0]} />
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+};
+
+// Accuracy vs Response Time Scatter
+const AccuracyLatencyScatter = ({ results }) => {
+  const data = useMemo(() => {
+    return results.map(result => ({
+      model: result.modelId.split(':')[0],
+      accuracy: result.accuracy?.overall || 0,
+      latency: result.averageResponseTime || 0,
+    }));
+  }, [results]);
+
+  return (
+    <div className="chart-container">
+      <h3 className="chart-title">Accuracy vs Response Time</h3>
+      <ResponsiveContainer width="100%" height={300}>
+        <ScatterChart margin={{ top: 20, right: 30, left: 20, bottom: 50 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+          <XAxis type="number" dataKey="accuracy" domain={[0, 100]} tickFormatter={(v) => `${v}%`} />
+          <YAxis type="number" dataKey="latency" tickFormatter={(v) => formatTime(v)} />
+          <Tooltip
+            formatter={(value, name) => {
+              if (name === 'accuracy') return [`${value.toFixed(1)}%`, 'Accuracy'];
+              if (name === 'latency') return [formatTime(value), 'Avg Response'];
+              return [value, name];
+            }}
+            labelFormatter={(label, payload) => payload?.[0]?.payload?.model || ''}
+            contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb' }}
+          />
+          <Scatter data={data} fill="#334155" />
+        </ScatterChart>
+      </ResponsiveContainer>
+    </div>
+  );
+};
+
 // Task Breakdown Bar Chart
-export const TaskBreakdownChart = ({ results }) => {
+const TaskBreakdownChart = ({ results }) => {
   const data = useMemo(() => {
     if (!results || results.length === 0) return [];
-    
+
     const tasks = new Set();
     results.forEach(result => {
       if (result.taskAccuracy) {
@@ -233,7 +300,7 @@ export const TaskBreakdownChart = ({ results }) => {
       .filter(task => results.some(r => r.byTask?.[task]?.total > 0))
       .map(task => {
         const taskLabel = TaskLabels[task] || task;
-        const entry = { 
+        const entry = {
           task: taskLabel.length > 12 ? taskLabel.substring(0, 10) + '...' : taskLabel,
           fullTask: taskLabel
         };
@@ -254,16 +321,198 @@ export const TaskBreakdownChart = ({ results }) => {
           <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
           <XAxis dataKey="task" tick={{ fontSize: 10 }} angle={-45} textAnchor="end" height={80} />
           <YAxis domain={[0, 100]} tickFormatter={(value) => `${value}%`} />
-          <Tooltip 
+          <Tooltip
             formatter={(value, name) => [value ? `${value}%` : 'N/A', name]}
             contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb' }}
           />
           <Legend wrapperStyle={{ fontSize: '12px' }} />
           {keys.map((key, index) => (
-            <Bar 
-              key={key} 
-              dataKey={key} 
-              fill={CHART_COLORS[index % CHART_COLORS.length]} 
+            <Bar
+              key={key}
+              dataKey={key}
+              fill={CHART_COLORS[index % CHART_COLORS.length]}
+              radius={[2, 2, 0, 0]}
+            />
+          ))}
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+};
+
+// Bias Score Bar Chart - Shows bias scores per category for each model
+const BiasScoreChart = ({ results }) => {
+  const data = useMemo(() => {
+    if (!results || results.length === 0) return [];
+
+    const tasks = new Set();
+    results.forEach(result => {
+      if (result.biasScores) {
+        Object.keys(result.biasScores).forEach(t => tasks.add(t));
+      }
+    });
+
+    return Array.from(tasks)
+      .filter(task => results.some(r => r.byTask?.[task]?.total > 0))
+      .map(task => {
+        const taskLabel = TaskLabels[task] || task;
+        const entry = {
+          task: taskLabel.length > 12 ? taskLabel.substring(0, 10) + '...' : taskLabel,
+          fullTask: taskLabel
+        };
+        results.forEach((result) => {
+          // Bias score ranges from -1 to 1
+          entry[result.modelId.split(':')[0].substring(0, 10)] = parseFloat((result.biasScores?.[task] || 0).toFixed(3));
+        });
+        return entry;
+      });
+  }, [results]);
+
+  const keys = results.map(r => r.modelId.split(':')[0].substring(0, 10));
+
+  // Custom tooltip to explain bias scores
+  const CustomTooltip = ({ active, payload, label }) => {
+    if (active && payload && payload.length) {
+      return (
+        <div style={{
+          background: '#fff',
+          border: '1px solid #e5e7eb',
+          borderRadius: '8px',
+          padding: '12px',
+          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+        }}>
+          <p style={{ margin: '0 0 8px 0', fontWeight: 'bold' }}>{label}</p>
+          {payload.map((entry, index) => (
+            <p key={index} style={{ margin: '4px 0', color: entry.color }}>
+              {entry.name}: {entry.value !== null ? entry.value.toFixed(3) : 'N/A'}
+            </p>
+          ))}
+          <p style={{ margin: '8px 0 0 0', fontSize: '11px', color: '#666', borderTop: '1px solid #eee', paddingTop: '8px' }}>
+            Bias Score: -1 (counter-stereotype) to +1 (pro-stereotype)
+          </p>
+        </div>
+      );
+    }
+    return null;
+  };
+
+  return (
+    <div className="chart-container">
+      <h3 className="chart-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <Scale style={{ width: '20px', height: '20px', flexShrink: 0 }} />
+        Bias Scores by Category
+      </h3>
+      <p style={{ fontSize: '12px', color: '#666', margin: '-8px 0 12px 0' }}>
+        Lower scores indicate less bias. Range: -1 (counter-stereotype) to +1 (pro-stereotype)
+      </p>
+      <ResponsiveContainer width="100%" height={400}>
+        <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 100 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+          <XAxis dataKey="task" tick={{ fontSize: 10 }} angle={-45} textAnchor="end" height={80} />
+          <YAxis domain={[-1, 1]} tickFormatter={(value) => `${value > 0 ? '+' : ''}${value}`} />
+          <ReferenceLine y={0} stroke="#666" strokeDasharray="3 3" />
+          <Tooltip content={<CustomTooltip />} />
+          <Legend wrapperStyle={{ fontSize: '12px' }} />
+          {keys.map((key, index) => (
+            <Bar
+              key={key}
+              dataKey={key}
+              fill={CHART_COLORS[index % CHART_COLORS.length]}
+              radius={[2, 2, 0, 0]}
+            />
+          ))}
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+};
+
+// Bias by Category Chart - Shows bias scores per category for each model
+const BiasByCategoryChart = ({ results }) => {
+  const data = useMemo(() => {
+    if (!results || results.length === 0) return [];
+
+    const tasks = new Set();
+    results.forEach(result => {
+      if (result.biasScores) {
+        Object.keys(result.biasScores).forEach(t => tasks.add(t));
+      }
+    });
+
+    return Array.from(tasks)
+      .filter(task => results.some(r => r.byTask?.[task]?.total > 0))
+      .map(task => {
+        const taskLabel = TaskLabels[task] || task;
+        const entry = {
+          task: taskLabel.length > 15 ? taskLabel.substring(0, 12) + '...' : taskLabel,
+          fullTask: taskLabel
+        };
+        results.forEach((result) => {
+          const biasScore = result.biasScores?.[task] || 0;
+          entry[result.modelId.split(':')[0].substring(0, 10)] = parseFloat(biasScore.toFixed(3));
+        });
+        return entry;
+      });
+  }, [results]);
+
+  const keys = results.map(r => r.modelId.split(':')[0].substring(0, 10));
+
+  // Custom tooltip to show bias interpretation
+  const CustomTooltip = ({ active, payload, label }) => {
+    if (active && payload && payload.length) {
+      return (
+        <div style={{
+          background: 'white',
+          border: '1px solid #e5e7eb',
+          borderRadius: '8px',
+          padding: '12px',
+          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+        }}>
+          <p style={{ fontWeight: 'bold', marginBottom: '8px' }}>{label}</p>
+          {payload.map((entry, idx) => {
+            const value = entry.value;
+            let interpretation = 'Neutral';
+            let color = '#6B7280';
+            if (value >= 0.75) { interpretation = 'Severe pro-stereotype'; color = '#DC2626'; }
+            else if (value >= 0.5) { interpretation = 'Strong pro-stereotype'; color = '#EF4444'; }
+            else if (value >= 0.25) { interpretation = 'Moderate pro-stereotype'; color = '#F97316'; }
+            else if (value > -0.25) { interpretation = 'Neutral / Fair'; color = '#22C55E'; }
+            else { interpretation = 'Counter-stereotype'; color = '#3B82F6'; }
+
+            return (
+              <div key={idx} style={{ marginBottom: '4px', fontSize: '12px' }}>
+                <span style={{ color: entry.color }}>●</span> {entry.name}: <strong>{value.toFixed(3)}</strong>
+                <span style={{ color, marginLeft: '8px' }}>({interpretation})</span>
+              </div>
+            );
+          })}
+        </div>
+      );
+    }
+    return null;
+  };
+
+  return (
+    <div className="chart-container">
+      <h3 className="chart-title">Bias by Category</h3>
+      <p style={{ fontSize: '12px', color: '#6B7280', marginBottom: '12px' }}>
+        Bias score ranges from -1 (counter-stereotype) to +1 (pro-stereotype). 0 = neutral/fair.
+      </p>
+      <ResponsiveContainer width="100%" height={400}>
+        <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 100 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+          <XAxis dataKey="task" tick={{ fontSize: 10 }} angle={-45} textAnchor="end" height={80} />
+          <YAxis domain={[-1, 1]} tickFormatter={(value) => value.toFixed(1)} />
+          <ReferenceLine y={0} stroke="#374151" strokeDasharray="2 2" />
+          <ReferenceLine y={0.25} stroke="#F97316" strokeDasharray="3 3" strokeOpacity={0.5} label={{ value: 'Moderate', position: 'right', fontSize: 10, fill: '#F97316' }} />
+          <ReferenceLine y={-0.25} stroke="#3B82F6" strokeDasharray="3 3" strokeOpacity={0.5} label={{ value: 'Counter', position: 'right', fontSize: 10, fill: '#3B82F6' }} />
+          <Tooltip content={<CustomTooltip />} />
+          <Legend wrapperStyle={{ fontSize: '12px' }} />
+          {keys.map((key, index) => (
+            <Bar
+              key={key}
+              dataKey={key}
+              fill={CHART_COLORS[index % CHART_COLORS.length]}
               radius={[2, 2, 0, 0]}
             />
           ))}
@@ -274,9 +523,8 @@ export const TaskBreakdownChart = ({ results }) => {
 };
 
 // Accuracy Distribution Pie Chart
-export const AccuracyDistributionChart = ({ result }) => {
+const AccuracyDistributionChart = ({ result }) => {
   const data = useMemo(() => {
-    const total = result.totalQuestions;
     return [
       { name: 'Correct', value: result.correct, color: '#22C55E' },
       { name: 'Incorrect', value: result.incorrect, color: '#EF4444' },
@@ -309,7 +557,7 @@ export const AccuracyDistributionChart = ({ result }) => {
 };
 
 // Unified Answer Distribution for All Models
-export const UnifiedAnswerDistribution = ({ results }) => {
+const UnifiedAnswerDistribution = ({ results }) => {
   const data = useMemo(() => {
     return results.map((result, idx) => ({
       model: result.modelId.split(':')[0],
@@ -366,7 +614,7 @@ export const UnifiedAnswerDistribution = ({ results }) => {
 };
 
 // Leaderboard Table
-export const Leaderboard = ({ results }) => {
+const Leaderboard = ({ results }) => {
   const sortedResults = useMemo(() => {
     return [...results].sort((a, b) => (b.accuracy?.overall || 0) - (a.accuracy?.overall || 0));
   }, [results]);
@@ -425,7 +673,37 @@ export const Leaderboard = ({ results }) => {
 };
 
 // Question Details Table - Enhanced with ALL models' answers side by side
-export const QuestionResultsTable = ({ results }) => {
+const QuestionResultsTable = ({ results, enableBiasAgent = true }) => {
+  const getBiasExplanation = (qr) => {
+    if (!qr) return 'No explanation available.';
+    const taskLabel = TaskLabels[qr.task] || qr.task;
+    if (qr.contextType === 'ambiguous') {
+      if (qr.isUnknown) {
+        return `Ambiguous context in ${taskLabel}; "Unknown" was the expected answer.`;
+      }
+      if (qr.isStereotyped) {
+        return `Ambiguous context in ${taskLabel}; chose stereotyped option instead of "Unknown".`;
+      }
+      if (qr.isCounterStereotyped) {
+        return `Ambiguous context in ${taskLabel}; chose counter-stereotyped option instead of "Unknown".`;
+      }
+      return `Ambiguous context in ${taskLabel}; answered despite insufficient evidence.`;
+    }
+    if (qr.isCorrect) {
+      return `Disambiguated context in ${taskLabel}; correct answer aligned with evidence.`;
+    }
+    if (qr.isUnknown) {
+      return `Disambiguated context in ${taskLabel}; answered "Unknown" when evidence was available.`;
+    }
+    if (qr.isStereotyped) {
+      return `Disambiguated context in ${taskLabel}; incorrect stereotyped choice over evidence.`;
+    }
+    if (qr.isCounterStereotyped) {
+      return `Disambiguated context in ${taskLabel}; incorrect counter-stereotyped choice over evidence.`;
+    }
+    return `Disambiguated context in ${taskLabel}; incorrect answer.`;
+  };
+
   // Group questions by questionId and aggregate all model answers
   const groupedQuestions = useMemo(() => {
     if (!results || results.length === 0) return [];
@@ -462,13 +740,14 @@ export const QuestionResultsTable = ({ results }) => {
           isCorrect: qr.isCorrect,
           responseTime: qr.responseTime,
           color: modelColor,
+          biasExplanation: enableBiasAgent ? getBiasExplanation(qr) : null,
         });
       });
     });
     
     // Sort by questionId
     return Object.values(questionMap).sort((a, b) => a.questionId - b.questionId);
-  }, [results]);
+  }, [results, enableBiasAgent, getBiasExplanation]);
 
   return (
     <div className="chart-container">
@@ -565,6 +844,15 @@ export const QuestionResultsTable = ({ results }) => {
                         <span className="answer-label">Time:</span>
                         <span className="answer-value">{formatTime(modelAns.responseTime || 0)}</span>
                       </div>
+                      {enableBiasAgent && modelAns.biasExplanation && (
+                        <div className="model-answer-explanation">
+                          <div className="agent-note-header">
+                            <span className="agent-icon bias-agent">BX</span>
+                            <span className="answer-label">Agent Note:</span>
+                          </div>
+                          <span className="answer-value">{modelAns.biasExplanation}</span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -577,17 +865,105 @@ export const QuestionResultsTable = ({ results }) => {
   );
 };
 
-// Statistics Summary Cards
-export const StatsSummary = ({ results, insights }) => {
+const ModelOpinionPanel = ({ results }) => {
   if (!results || results.length === 0) return null;
 
-  const bestModel = results.reduce((prev, curr) => 
+  const getTaskExtremes = (taskAccuracy) => {
+    const entries = Object.entries(taskAccuracy || {});
+    if (entries.length === 0) return { best: [], worst: [] };
+    const sorted = entries.sort((a, b) => b[1] - a[1]);
+    return {
+      best: sorted.slice(0, 2),
+      worst: sorted.slice(-2).reverse(),
+    };
+  };
+
+  return (
+    <div className="chart-container">
+      <h3 className="chart-title">Model Quality & Bias Opinion</h3>
+      <div className="model-opinion-grid">
+        {results.map((result) => {
+          const accuracy = result.accuracy?.overall || 0;
+          const biasAmb = result.overallBiasScoreAmbiguous || 0;
+          const biasDis = result.overallBiasScoreDisambiguated || 0;
+          const { best, worst } = getTaskExtremes(result.taskAccuracy);
+          const strengths = [];
+          if (accuracy >= 75) strengths.push('High overall accuracy');
+          if ((result.averageResponseTime || 0) < 1500) strengths.push('Fast response time');
+          if (Math.abs(biasAmb) < 0.25) strengths.push('Low ambiguous bias');
+          const weaknesses = [];
+          if (accuracy < 60) weaknesses.push('Lower overall accuracy');
+          if (Math.abs(biasAmb) >= 0.5) weaknesses.push('High ambiguous bias');
+          if (Math.abs(biasDis) >= 0.5) weaknesses.push('High disambiguated bias');
+
+          return (
+            <div key={result.modelId} className="model-opinion-card">
+              <div className="model-opinion-header">
+                <div className="model-opinion-title">
+                  <strong>{result.modelId.split(':')[0]}</strong>
+                  <span className="agent-icon bias-agent">BX</span>
+                </div>
+                <span className="model-opinion-score">{accuracy.toFixed(1)}%</span>
+              </div>
+              <div className="model-opinion-section">
+                <span className="model-opinion-label">Strengths</span>
+                <ul>
+                  {(strengths.length ? strengths : ['No clear strengths identified yet']).map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              </div>
+              <div className="model-opinion-section">
+                <span className="model-opinion-label">Weaknesses</span>
+                <ul>
+                  {(weaknesses.length ? weaknesses : ['No major weaknesses detected']).map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              </div>
+              <div className="model-opinion-section">
+                <span className="model-opinion-label">Task Performance</span>
+                <div className="model-opinion-tasks">
+                  <div>
+                    <span className="model-opinion-sub">Best</span>
+                    {best.length > 0 ? best.map(([task, value]) => (
+                      <div key={task}>{TaskLabels[task] || task}: {value.toFixed(1)}%</div>
+                    )) : <div>N/A</div>}
+                  </div>
+                  <div>
+                    <span className="model-opinion-sub">Needs Work</span>
+                    {worst.length > 0 ? worst.map(([task, value]) => (
+                      <div key={task}>{TaskLabels[task] || task}: {value.toFixed(1)}%</div>
+                    )) : <div>N/A</div>}
+                  </div>
+                </div>
+              </div>
+              <div className="model-opinion-footer">
+                Bias s_amb: {biasAmb.toFixed(2)} | Bias s_dis: {biasDis.toFixed(2)}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+// Statistics Summary Cards
+const StatsSummary = ({ results }) => {
+  if (!results || results.length === 0) return null;
+
+  const validResults = results.filter(Boolean);
+  if (validResults.length === 0) return null;
+
+  const bestModel = validResults.reduce((prev, curr) => 
     (curr.accuracy?.overall || 0) > (prev.accuracy?.overall || 0) ? curr : prev
   );
-  const fastestModel = results.reduce((prev, curr) => 
+  const fastestModel = validResults.reduce((prev, curr) => 
     (curr.averageResponseTime || Infinity) < (prev.averageResponseTime || Infinity) ? curr : prev
   );
-  const avgAccuracy = results.reduce((sum, r) => sum + (r.accuracy?.overall || 0), 0) / results.length;
+  const avgAccuracy = validResults.reduce((sum, r) => sum + (r.accuracy?.overall || 0), 0) / validResults.length;
+  const totalQuestions = validResults.find(r => r.totalQuestions != null)?.totalQuestions || 0;
 
   return (
     <div className="stats-grid">
@@ -604,11 +980,11 @@ export const StatsSummary = ({ results, insights }) => {
       <div className="stat-card">
         <div className="stat-label">Average Accuracy</div>
         <div className="stat-value stat-value-purple">{avgAccuracy.toFixed(1)}%</div>
-        <div className="stat-subtitle">across {results.length} models</div>
+        <div className="stat-subtitle">across {validResults.length} models</div>
       </div>
       <div className="stat-card">
         <div className="stat-label">Questions Tested</div>
-        <div className="stat-value stat-value-amber">{results[0].totalQuestions || 0}</div>
+        <div className="stat-value stat-value-amber">{totalQuestions}</div>
         <div className="stat-subtitle">BBQ benchmark</div>
       </div>
     </div>
@@ -616,7 +992,7 @@ export const StatsSummary = ({ results, insights }) => {
 };
 
 // Insights Panel
-export const InsightsPanel = ({ insights, results }) => {
+const InsightsPanel = ({ insights }) => {
   if (!insights || !insights.mostAccurate || !insights.fastestModel) return null;
 
   return (
@@ -695,10 +1071,32 @@ export const InsightsPanel = ({ insights, results }) => {
 };
 
 // Model Selector Component Data
-export const getModelOptions = (availableModels) => {
+const getModelOptions = (availableModels) => {
   return availableModels.map(m => ({
     value: m.id,
     label: `${m.name} (${m.parameters})`,
     details: m,
   }));
+};
+
+export {
+  AccuracyComparisonChart,
+  TaskPerformanceRadar,
+  ResponseTimeChart,
+  ContextImpactChart,
+  BiasScoreComparisonChart,
+  AccuracyLatencyScatter,
+  TaskBreakdownChart,
+  BiasScoreChart,
+  AccuracyDistributionChart,
+  UnifiedAnswerDistribution,
+  Leaderboard,
+  QuestionResultsTable,
+  ModelOpinionPanel,
+  StatsSummary,
+  InsightsPanel,
+  getModelOptions,
+  formatTime,
+  formatPercent,
+  CHART_COLORS
 };

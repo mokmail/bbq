@@ -349,8 +349,8 @@ const BBQInfo = () => (
           <h3 className="text-xl font-bold text-gray-800">11 Bias Categories</h3>
         </div>
         <div className="grid grid-cols-2 gap-2 text-sm text-gray-600">
-          {Object.values(TaskLabels).map((label) => (
-            <span key={label} className="flex items-center gap-1">
+          {Object.entries(TaskLabels).map(([key, label]) => (
+            <span key={key} className="flex items-center gap-1">
               <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
               {label}
             </span>
@@ -434,18 +434,17 @@ const BBQInfo = () => (
 // Main App Component
 function App() {
   const [activeTab, setActiveTab] = useState('evaluate');
-  const [reportResults, setReportResults] = useState([]);
-
-  useEffect(() => {
+  const [reportResults, setReportResults] = useState(() => {
     try {
       const saved = localStorage.getItem('kmail-bbq-report');
       if (saved) {
-        setReportResults(JSON.parse(saved));
+        return JSON.parse(saved);
       }
     } catch (error) {
       console.warn('Failed to load saved report data.', error);
     }
-  }, []);
+    return [];
+  });
 
   useEffect(() => {
     try {

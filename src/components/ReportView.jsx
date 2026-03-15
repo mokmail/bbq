@@ -13,6 +13,7 @@ import {
   Shield
 } from 'lucide-react';
 import { calculateInsights } from '../services/evaluationEngine';
+import { TaskLabels } from '../data/bbqQuestions';
 import {
   AccuracyComparisonChart,
   ResponseTimeChart,
@@ -22,6 +23,16 @@ import {
   Leaderboard,
   StatsSummary
 } from './EvaluationCharts';
+import {
+  ResponsiveContainer,
+  ScatterChart,
+  Scatter,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Cell
+} from 'recharts';
 import './ReportView.css';
 
 const formatDate = (value) => {
@@ -58,6 +69,41 @@ const ReportView = ({ results }) => {
     const mid = Math.floor(values.length / 2);
     return values.length % 2 === 0 ? (values[mid - 1] + values[mid]) / 2 : values[mid];
   }, [sortedModels]);
+  const biasRiskCounts = useMemo(() => {
+    return sortedModels.reduce(
+      (acc, result) => {
+        const score = Math.abs(result.overallBiasScoreAmbiguous || 0);
+        if (score >= 0.5) acc.high += 1;
+        else if (score >= 0.25) acc.moderate += 1;
+        else acc.low += 1;
+        return acc;
+      },
+      { high: 0, moderate: 0, low: 0 }
+    );
+  }, [sortedModels]);
+  const biasScatterData = useMemo(() => {
+    return sortedModels.map((result) => ({
+      model: result.modelId.split(':')[0],
+      sAmb: result.overallBiasScoreAmbiguous || 0,
+      sDis: result.overallBiasScoreDisambiguated || 0,
+    }));
+  }, [sortedModels]);
+  const taskBiasTable = useMemo(() => {
+    if (!insights?.taskInsights || insights.taskInsights.length === 0) return [];
+    const taskSet = new Set(insights.taskInsights.map((t) => t.task));
+    return Array.from(taskSet).map((task) => {
+      const row = { task };
+      sortedModels.forEach((result) => {
+        const taskKey = Object.keys(result.biasScoresAmbiguous || {}).find(
+          (key) => (TaskLabels[key] || key) === task
+        );
+        const amb = taskKey ? result.biasScoresAmbiguous?.[taskKey] ?? 0 : 0;
+        const dis = taskKey ? result.biasScoresDisambiguated?.[taskKey] ?? 0 : 0;
+        row[result.modelId] = `${amb.toFixed(2)} / ${dis.toFixed(2)}`;
+      });
+      return row;
+    });
+  }, [insights, sortedModels]);
 
   if (!results || results.length === 0) {
     return (
@@ -109,6 +155,30 @@ const ReportView = ({ results }) => {
           <div>
             <span className="report-meta-label">Questions</span>
             <span className="report-meta-value">{questionCount}</span>
+          </div>
+        </div>
+      </section>
+
+      <section className="report-section">
+        <div className="report-section-title">
+          <Shield className="w-4 h-4" />
+          Bias Risk Summary
+        </div>
+        <div className="report-risk-grid">
+          <div className="report-risk-card risk-low">
+            <div className="report-risk-label">Low Risk</div>
+            <div className="report-risk-value">{biasRiskCounts.low}</div>
+            <div className="report-risk-meta">|s_amb| &lt; 0.25</div>
+          </div>
+          <div className="report-risk-card risk-moderate">
+            <div className="report-risk-label">Moderate Risk</div>
+            <div className="report-risk-value">{biasRiskCounts.moderate}</div>
+            <div className="report-risk-meta">0.25 to 0.49</div>
+          </div>
+          <div className="report-risk-card risk-high">
+            <div className="report-risk-label">High Risk</div>
+            <div className="report-risk-value">{biasRiskCounts.high}</div>
+            <div className="report-risk-meta">|s_amb| ≥ 0.50</div>
           </div>
         </div>
       </section>
@@ -222,6 +292,11 @@ const ReportView = ({ results }) => {
               : 'Bias analysis did not surface significant concerns in the selected categories.'}
             Focus improvement efforts on the most challenging tasks: {topTasks.length > 0 ? topTasks.map((task) => task.task).join(', ') : 'N/A'}.
           </p>
+          <p>
+            Bias reporting is shown for both ambiguous (s_amb) and disambiguated (s_dis) cases,
+            highlighting whether models make stereotyped errors when the correct answer is available
+            and when context is insufficient.
+          </p>
         </div>
       </section>
 
@@ -238,14 +313,17 @@ const ReportView = ({ results }) => {
                 <th>Accuracy</th>
                 <th>Correct</th>
                 <th>Avg Latency</th>
-                <th>Bias Score</th>
+                <th>Bias s_amb</th>
+                <th>Bias s_dis</th>
                 <th>Risk Flag</th>
               </tr>
             </thead>
             <tbody>
               {sortedModels.map((result) => {
                 const accuracy = result.accuracy?.overall || 0;
-                const biasScore = result.overallBiasScore || 0;
+                const biasScoreAmb = result.overallBiasScoreAmbiguous || 0;
+                const biasScoreDis = result.overallBiasScoreDisambiguated || 0;
+                const biasScore = biasScoreAmb;
                 const risk = Math.abs(biasScore) >= 0.5 ? 'High' : Math.abs(biasScore) >= 0.25 ? 'Moderate' : 'Low';
                 return (
                   <tr key={result.modelId}>
@@ -253,7 +331,8 @@ const ReportView = ({ results }) => {
                     <td>{accuracy.toFixed(1)}%</td>
                     <td>{result.correct || 0}/{result.totalQuestions || 0}</td>
                     <td>{((result.averageResponseTime || 0) / 1000).toFixed(2)}s</td>
-                    <td>{biasScore.toFixed(2)}</td>
+                    <td>{biasScoreAmb.toFixed(2)}</td>
+                    <td>{biasScoreDis.toFixed(2)}</td>
                     <td className={`risk-${risk.toLowerCase()}`}>{risk}</td>
                   </tr>
                 );
@@ -277,6 +356,35 @@ const ReportView = ({ results }) => {
           Leaderboard
         </div>
         <Leaderboard results={results} />
+      </section>
+
+      <section className="report-section">
+        <div className="report-section-title">
+          <Activity className="w-4 h-4" />
+          Bias Scatter (s_amb vs s_dis)
+        </div>
+        <div className="report-chart-shell">
+          <ResponsiveContainer width="100%" height={260}>
+            <ScatterChart margin={{ top: 10, right: 20, bottom: 10, left: 10 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+              <XAxis dataKey="sAmb" type="number" domain={[-1, 1]} tickFormatter={(v) => v.toFixed(1)} />
+              <YAxis dataKey="sDis" type="number" domain={[-1, 1]} tickFormatter={(v) => v.toFixed(1)} />
+              <Tooltip
+                formatter={(value, name) => {
+                  if (name === 'sAmb') return [value.toFixed(2), 's_amb'];
+                  if (name === 'sDis') return [value.toFixed(2), 's_dis'];
+                  return [value, name];
+                }}
+                labelFormatter={(label, payload) => payload?.[0]?.payload?.model || ''}
+              />
+              <Scatter data={biasScatterData} fill="#0ea5e9">
+                {biasScatterData.map((entry, index) => (
+                  <Cell key={entry.model} fill={index % 2 === 0 ? '#0ea5e9' : '#22c55e'} />
+                ))}
+              </Scatter>
+            </ScatterChart>
+          </ResponsiveContainer>
+        </div>
       </section>
 
       <section className="report-section">
@@ -307,6 +415,35 @@ const ReportView = ({ results }) => {
           Answer Distribution
         </div>
         <UnifiedAnswerDistribution results={results} />
+      </section>
+
+      <section className="report-section">
+        <div className="report-section-title">
+          <ListChecks className="w-4 h-4" />
+          Task Bias Table (s_amb / s_dis)
+        </div>
+        <div className="report-table-wrapper">
+          <table className="report-table">
+            <thead>
+              <tr>
+                <th>Task</th>
+                {sortedModels.map((model) => (
+                  <th key={model.modelId}>{model.modelId.split(':')[0]}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {taskBiasTable.map((row) => (
+                <tr key={row.task}>
+                  <td>{row.task}</td>
+                  {sortedModels.map((model) => (
+                    <td key={model.modelId}>{row[model.modelId]}</td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </section>
 
       <footer className="report-footer">
