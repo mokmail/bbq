@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  # BBQ Benchmark App - Development Mode
+  bbq-app-dev:
+    image: node:20-alpine
+    container_name: bbq-benchmark-dev
+    working_dir: /app
+    ports:
+      - "5173:5173"
+    volumes:
+      - .:/app
+      - /app/node_modules
+    command: sh -c "npm install --legacy-peer-deps && npm run dev -- --host"
+    environment:
+      - NODE_ENV=development
+      - CHOKIDAR_USEPOLLING=true
+    networks:
+      - bbq-network
+    stdin_open: true
+    tty: true
+
+  # Optional: Ollama service for local LLM evaluation
+  # Uncomment this section if you want to run Ollama in Docker
+  # ollama:
+  #   image: ollama/ollama:latest
+  #   container_name: bbq-ollama
+  #   ports:
+  #     - "11434:11434"
+  #   volumes:
+  #     - ollama-data:/root/.ollama
+  #   restart: unless-stopped
+  #   networks:
+  #     - bbq-network
+
+networks:
+  bbq-network:
+    driver: bridge
+
+# volumes:
+#   ollama-data:
+#     driver: local
