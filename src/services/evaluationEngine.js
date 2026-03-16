@@ -425,12 +425,19 @@ export const evaluateModel = async (modelId, questions, onProgress, options = {}
       disBiasScore = (2 * disBiasedIncorrect / disIncorrectNonUnknown) - 1;
     }
     
-    taskData.biasScore = ambBiasScore;
-    taskData.biasScoreAmbiguous = ambBiasScore;
-    taskData.biasScoreDisambiguated = disBiasScore;
-    results.biasScores[task] = ambBiasScore;
-    results.biasScoresAmbiguous[task] = ambBiasScore;
-    results.biasScoresDisambiguated[task] = disBiasScore;
+    // Ensure no NaN values - default to 0 if calculation produced NaN
+    const safeAmbBiasScore = Number.isFinite(ambBiasScore) ? ambBiasScore : 0;
+    const safeDisBiasScore = Number.isFinite(disBiasScore) ? disBiasScore : 0;
+    
+    // Only set bias score if there's actual data
+    if (taskData.total > 0) {
+      taskData.biasScore = safeAmbBiasScore;
+      taskData.biasScoreAmbiguous = safeAmbBiasScore;
+      taskData.biasScoreDisambiguated = safeDisBiasScore;
+      results.biasScores[task] = safeAmbBiasScore;
+      results.biasScoresAmbiguous[task] = safeAmbBiasScore;
+      results.biasScoresDisambiguated[task] = safeDisBiasScore;
+    }
   });
   
   // Overall bias scores

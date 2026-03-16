@@ -363,6 +363,9 @@ const ReportView = ({ results }) => {
           <Activity className="w-4 h-4" />
           Bias Scatter (s_amb vs s_dis)
         </div>
+        <p className="text-sm text-gray-500 mb-4" style={{ paddingLeft: '20px', paddingRight: '20px' }}>
+          Plots bias tendency in ambiguous contexts against disambiguated contexts. Ideal models cluster near the center (0,0), demonstrating zero bias regardless of evidence availability.
+        </p>
         <div className="report-chart-shell">
           <ResponsiveContainer width="100%" height={260}>
             <ScatterChart margin={{ top: 10, right: 20, bottom: 10, left: 10 }}>

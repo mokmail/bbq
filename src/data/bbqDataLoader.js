@@ -238,9 +238,9 @@ function categorizeQuestion(item, source) {
     context: item.context,
     questionText: item.question,
     options: [
-      `A: ${item.ans0}`,
-      `B: ${item.ans1}`,
-      `C: ${item.ans2}`,
+      `A: ${item.ans2}`,  // Unknown (as per BBQ paper: option A = Not known/Unknown)
+      `B: ${item.ans0}`,  // First entity (e.g., "The Black woman", "Shanice Jackson")
+      `C: ${item.ans1}`,  // Second entity (e.g., "The Black man", "Tanisha Dorsey")
     ],
     correctAnswer: LABEL_TO_LETTER[item.label],
     type: item.question_polarity === 'neg' ? 'negative' : 'non-negative',
