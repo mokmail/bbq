@@ -10,11 +10,15 @@ import {
   Target,
   Scale,
   Bot,
-  FileText
+  FileText,
+  BookOpen,
+  MessageCircle
 } from 'lucide-react';
 import { bbqQuestions, TaskLabels, BBQTasks, getQuestionsByTask } from './data/bbqQuestions';
 import LLMEvaluator from './components/LLMEvaluator';
 import ReportView from './components/ReportView';
+import EducationalSlides from './components/EducationalSlides';
+import ChatAssistant from './components/ChatAssistant';
 import logo from './assets/logo.png';
 import './index.css';
 
@@ -434,6 +438,7 @@ const BBQInfo = () => (
 // Main App Component
 function App() {
   const [activeTab, setActiveTab] = useState('evaluate');
+  const [chatOpen, setChatOpen] = useState(false);
   const [reportResults, setReportResults] = useState(() => {
     try {
       const saved = localStorage.getItem('kmail-bbq-report');
@@ -482,10 +487,25 @@ function App() {
                 Report
               </button>
               <button
+                onClick={() => setActiveTab('slides')}
+                className={`flex items-center gap-2 ${activeTab === 'slides' ? 'active' : ''}`}
+              >
+                <BookOpen className="w-4 h-4" />
+                Learn
+              </button>
+              <button
                 onClick={() => setActiveTab('info')}
                 className={activeTab === 'info' ? 'active' : ''}
               >
                 About BBQ
+              </button>
+              <button
+                onClick={() => setChatOpen(!chatOpen)}
+                className={`flex items-center gap-2 ${chatOpen ? 'active' : ''}`}
+                title="Open Assistant"
+              >
+                <MessageCircle className="w-4 h-4" />
+                Assistant
               </button>
             </div>
           </div>
@@ -502,6 +522,9 @@ function App() {
         )}
         {activeTab === 'report' && (
           <ReportView results={reportResults} />
+        )}
+        {activeTab === 'slides' && (
+          <EducationalSlides />
         )}
         {activeTab === 'info' && (
           <BBQInfo />
@@ -527,6 +550,13 @@ function App() {
           </p>
         </div>
       </footer>
+
+      {/* Chat Assistant - controlled from navigation */}
+      <ChatAssistant 
+        results={reportResults}
+        isOpen={chatOpen}
+        onToggle={() => setChatOpen(!chatOpen)}
+      />
     </div>
   );
 }

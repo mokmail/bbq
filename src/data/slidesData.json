@@ -1,0 +1,335 @@
+{
+  "title": "Unmasking AI Bias",
+  "totalSlides": 14,
+  "slides": [
+    {
+      "id": 1,
+      "type": "title",
+      "title": "Unmasking AI Bias",
+      "subtitle": "Understanding, Detecting, and Mitigating Bias in Artificial Intelligence",
+      "content": "A comprehensive guide to identifying and addressing bias in AI systems through visual learning and interactive exploration. This module covers the fundamentals of AI bias, its sources, real-world impacts, and practical mitigation strategies.",
+      "illustration": "ai-brain",
+      "icon": "brain",
+      "color": "blue"
+    },
+    {
+      "id": 2,
+      "type": "content",
+      "title": "What is AI Bias?",
+      "content": "AI bias refers to systematic and repeatable errors in a computer system that create unfair outcomes, privileging one arbitrary group of users over others. Unlike random errors, bias creates consistent patterns that disadvantage certain populations.",
+      "illustration": "bias-warning",
+      "bulletPoints": [
+        "Systematic errors that disadvantage certain groups",
+        "Can be intentional or unintentional",
+        "Present in data, algorithms, and human oversight",
+        "Affects decision-making across all domains",
+        "Often reflects and amplifies existing societal inequalities"
+      ],
+      "icon": "alert-triangle",
+      "color": "red",
+      "quote": {
+        "text": "Algorithms are opinions embedded in code.",
+        "author": "Cathy O'Neil, Author of Weapons of Math Destruction"
+      }
+    },
+    {
+      "id": 3,
+      "type": "chart",
+      "title": "Types of AI Bias",
+      "content": "AI bias manifests in multiple forms throughout the development and deployment lifecycle. Understanding these types helps identify where interventions are needed.",
+      "illustration": "types-chart",
+      "chartType": "bar",
+      "chartData": {
+        "labels": ["Data Bias", "Algorithmic Bias", "User Interaction Bias", "Evaluation Bias", "Deployment Bias"],
+        "datasets": [{
+          "label": "Prevalence (%)",
+          "data": [45, 25, 15, 10, 5],
+          "backgroundColor": ["#3b82f6", "#8b5cf6", "#f59e0b", "#10b981", "#ef4444"]
+        }]
+      },
+      "icon": "pie-chart",
+      "color": "purple"
+    },
+    {
+      "id": 4,
+      "type": "content",
+      "title": "Sources of Bias",
+      "content": "Understanding where bias originates is crucial for effective mitigation strategies. Each source requires different approaches to address.",
+      "illustration": "sources-network",
+      "sections": [
+        {
+          "title": "Historical Data",
+          "content": "Training data reflects past societal biases and inequalities, perpetuating historical discrimination into AI systems"
+        },
+        {
+          "title": "Sampling Bias",
+          "content": "Underrepresentation of certain groups in training datasets leads to poor performance for those populations"
+        },
+        {
+          "title": "Feature Selection",
+          "content": "Choosing features that correlate with protected attributes can introduce proxy discrimination"
+        },
+        {
+          "title": "Label Bias",
+          "content": "Human annotators introduce subjective judgments and stereotypes during the labeling process"
+        },
+        {
+          "title": "Confirmation Bias",
+          "content": "Developers may unconsciously select data and metrics that confirm their existing beliefs"
+        }
+      ],
+      "icon": "search",
+      "color": "orange"
+    },
+    {
+      "id": 5,
+      "type": "chart",
+      "title": "Real-World Impact of AI Bias",
+      "content": "Documented cases of AI bias affecting millions of people across different sectors. These numbers represent reported incidents and likely underrepresent the true scale.",
+      "illustration": "impact-areas",
+      "chartType": "horizontalBar",
+      "chartData": {
+        "labels": ["Hiring", "Criminal Justice", "Healthcare", "Finance", "Education"],
+        "datasets": [{
+          "label": "Reported Cases",
+          "data": [85, 120, 65, 95, 45],
+          "backgroundColor": "#3b82f6"
+        }]
+      },
+      "icon": "activity",
+      "color": "red"
+    },
+    {
+      "id": 6,
+      "type": "content",
+      "title": "Famous Bias Cases",
+      "content": "Several high-profile cases have exposed the real-world consequences of AI bias, leading to regulatory scrutiny and calls for accountability.",
+      "illustration": "bias-warning",
+      "sections": [
+        {
+          "title": "COMPAS Recidivism Algorithm",
+          "content": "Used by US courts, it incorrectly labeled Black defendants as 'high risk' at nearly twice the rate of white defendants"
+        },
+        {
+          "title": "Amazon Hiring Algorithm",
+          "content": "Trained on historical data, it systematically downgraded resumes from women for technical positions"
+        },
+        {
+          "title": "Google Photos",
+          "content": "Image classification algorithm labeled Black people as gorillas, highlighting flaws in training data"
+        },
+        {
+          "title": "Apple Card",
+          "content": "Credit limit algorithm exhibited gender bias, giving significantly lower limits to women despite similar creditworthiness"
+        }
+      ],
+      "icon": "alert-triangle",
+      "color": "red"
+    },
+    {
+      "id": 7,
+      "type": "content",
+      "title": "The BBQ Benchmark",
+      "content": "The Bias Benchmark for Question Answering (BBQ) is a comprehensive dataset designed to evaluate social biases in question answering models across multiple demographic categories.",
+      "illustration": "bbq-logo",
+      "bulletPoints": [
+        "11 bias categories including age, gender, race, religion, and more",
+        "58,492 examples with ambiguous and disambiguated contexts",
+        "Tests for stereotyping and bias alignment in model responses",
+        "Measures accuracy and bias scores separately for comprehensive evaluation",
+        "Provides standardized metrics for comparing model fairness"
+      ],
+      "stats": [
+        { "label": "Categories", "value": "11" },
+        { "label": "Examples", "value": "58,492" },
+        { "label": "Demographics", "value": "9" }
+      ],
+      "icon": "scale",
+      "color": "blue"
+    },
+    {
+      "id": 8,
+      "type": "chart",
+      "title": "BBQ Bias Categories Distribution",
+      "content": "Distribution of examples across different bias categories in the BBQ dataset. The largest categories focus on intersectional biases (race × gender, race × SES).",
+      "illustration": "categories-wheel",
+      "chartType": "doughnut",
+      "chartData": {
+        "labels": ["Race by Gender", "Race by SES", "Socio-economic", "Gender", "Age", "Race/Ethnicity", "Nationality", "Disability", "Physical Appearance", "Religion", "Sexual Orientation"],
+        "datasets": [{
+          "data": [15960, 11160, 6864, 5672, 3680, 6880, 3080, 1556, 1576, 1200, 864],
+          "backgroundColor": [
+            "#3b82f6", "#8b5cf6", "#f59e0b", "#10b981", "#ef4444",
+            "#06b6d4", "#f97316", "#84cc16", "#ec4899", "#6366f1", "#14b8a6"
+          ]
+        }]
+      },
+      "icon": "bar-chart",
+      "color": "green"
+    },
+    {
+      "id": 9,
+      "type": "content",
+      "title": "Bias in NLP Models",
+      "content": "Large Language Models (LLMs) can exhibit various forms of bias in their text generation, reflecting patterns learned from training data.",
+      "illustration": "bbq-logo",
+      "bulletPoints": [
+        "Stereotypical associations between demographic groups and professions",
+        "Gender bias in pronoun resolution and job-related contexts",
+        "Racial and ethnic bias in sentiment analysis",
+        "Religious bias in character associations",
+        "Age-related bias in workplace scenarios"
+      ],
+      "sections": [
+        {
+          "title": "Representation Bias",
+          "content": "Underrepresented groups in training data lead to poor model performance for those populations"
+        },
+        {
+          "title": "Performance Bias",
+          "content": "Models perform differently across demographic groups, even when accuracy is similar overall"
+        },
+        {
+          "title": "Aggregation Bias",
+          "content": "One-size-fits-all models fail to capture group-specific patterns"
+        }
+      ],
+      "icon": "brain",
+      "color": "purple"
+    },
+    {
+      "id": 10,
+      "type": "content",
+      "title": "Mitigation Strategies",
+      "content": "Effective approaches to reduce bias in AI systems throughout the development lifecycle. A multi-layered approach is most effective.",
+      "illustration": "mitigation-steps",
+      "sections": [
+        {
+          "title": "Data Preprocessing",
+          "content": "Balance datasets, remove sensitive attributes, augment underrepresented groups, and apply fairness constraints"
+        },
+        {
+          "title": "Algorithmic Fairness",
+          "content": "Implement fairness constraints, adversarial debiasing, and regularization techniques during training"
+        },
+        {
+          "title": "Post-Processing",
+          "content": "Adjust model outputs to ensure equalized odds and demographic parity across groups"
+        },
+        {
+          "title": "Continuous Monitoring",
+          "content": "Track model performance across demographic groups in production with automated alerts"
+        }
+      ],
+      "icon": "shield",
+      "color": "teal"
+    },
+    {
+      "id": 11,
+      "type": "chart",
+      "title": "Fairness Metrics Comparison",
+      "content": "Different fairness metrics measure various aspects of algorithmic fairness. This radar chart shows improvement after applying mitigation strategies.",
+      "illustration": "fairness-comparison",
+      "chartType": "radar",
+      "chartData": {
+        "labels": ["Demographic Parity", "Equal Opportunity", "Equalized Odds", "Predictive Parity", "Individual Fairness"],
+        "datasets": [
+          {
+            "label": "Before Mitigation",
+            "data": [45, 52, 38, 41, 35],
+            "borderColor": "#ef4444",
+            "backgroundColor": "rgba(239, 68, 68, 0.2)"
+          },
+          {
+            "label": "After Mitigation",
+            "data": [85, 88, 82, 86, 79],
+            "borderColor": "#10b981",
+            "backgroundColor": "rgba(16, 185, 129, 0.2)"
+          }
+        ]
+      },
+      "icon": "check-circle",
+      "color": "green"
+    },
+    {
+      "id": 12,
+      "type": "content",
+      "title": "Fairness Metrics Explained",
+      "content": "Understanding different fairness metrics helps choose the right approach for your specific use case. Each metric has trade-offs.",
+      "illustration": "best-practices",
+      "sections": [
+        {
+          "title": "Demographic Parity",
+          "content": "Ensure positive outcomes are equally likely across demographic groups, regardless of qualifications"
+        },
+        {
+          "title": "Equal Opportunity",
+          "content": "Ensure equally qualified individuals have equal chances of positive outcomes"
+        },
+        {
+          "title": "Equalized Odds",
+          "content": "True positive and false positive rates should be equal across groups for qualified individuals"
+        },
+        {
+          "title": "Predictive Parity",
+          "content": "Predictions should have similar accuracy across demographic groups"
+        }
+      ],
+      "icon": "scale",
+      "color": "blue"
+    },
+    {
+      "id": 13,
+      "type": "content",
+      "title": "Best Practices & Recommendations",
+      "content": "Key takeaways for building fair and unbiased AI systems. Implementing these practices helps create more equitable technology.",
+      "illustration": "best-practices",
+      "bulletPoints": [
+        "Conduct regular bias audits using standardized benchmarks like BBQ",
+        "Diversify development teams to bring multiple perspectives to design",
+        "Document data sources and potential biases transparently for stakeholders",
+        "Establish clear fairness metrics relevant to your specific use case",
+        "Implement human-in-the-loop oversight for high-stakes decisions",
+        "Create feedback mechanisms for affected communities to report issues",
+        "Use explainable AI techniques to understand model decisions"
+      ],
+      "callToAction": {
+        "text": "Try the BBQ Benchmark",
+        "link": "/evaluate"
+      },
+      "icon": "lightbulb",
+      "color": "yellow"
+    },
+    {
+      "id": 14,
+      "type": "content",
+      "title": "Your Role in AI Fairness",
+      "content": "Everyone has a role to play in creating fair AI systems. From developers to policymakers to end users, collective action drives change.",
+      "illustration": "best-practices",
+      "sections": [
+        {
+          "title": "For Developers",
+          "content": "Prioritize fairness from the start, not as an afterthought. Use bias detection tools and follow ethical guidelines."
+        },
+        {
+          "title": "For Organizations",
+          "content": "Establish AI ethics committees, conduct regular audits, and invest in diverse teams."
+        },
+        {
+          "title": "For Policymakers",
+          "content": "Create regulations that require transparency and accountability in AI systems."
+        },
+        {
+          "title": "For Everyone",
+          "content": "Stay informed, ask questions, and advocate for responsible AI development."
+        }
+      ],
+      "callToAction": {
+        "text": "Start Evaluating",
+        "link": "/evaluate"
+      },
+      "icon": "users",
+      "color": "green"
+    }
+  ]
+}
