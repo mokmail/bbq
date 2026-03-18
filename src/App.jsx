@@ -11,13 +11,11 @@ import {
   Scale,
   Bot,
   FileText,
-  BookOpen,
   MessageCircle
 } from 'lucide-react';
 import { bbqQuestions, TaskLabels, BBQTasks, getQuestionsByTask } from './data/bbqQuestions';
 import LLMEvaluator from './components/LLMEvaluator';
 import ReportView from './components/ReportView';
-import EducationalSlides from './components/EducationalSlides';
 import ChatAssistant from './components/ChatAssistant';
 import logo from './assets/logo.png';
 import './index.css';
@@ -487,13 +485,6 @@ function App() {
                 Report
               </button>
               <button
-                onClick={() => setActiveTab('slides')}
-                className={`flex items-center gap-2 ${activeTab === 'slides' ? 'active' : ''}`}
-              >
-                <BookOpen className="w-4 h-4" />
-                Learn
-              </button>
-              <button
                 onClick={() => setActiveTab('info')}
                 className={activeTab === 'info' ? 'active' : ''}
               >
@@ -522,9 +513,6 @@ function App() {
         )}
         {activeTab === 'report' && (
           <ReportView results={reportResults} />
-        )}
-        {activeTab === 'slides' && (
-          <EducationalSlides />
         )}
         {activeTab === 'info' && (
           <BBQInfo />
