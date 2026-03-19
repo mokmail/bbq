@@ -1,13 +1,7 @@
-# BBQ Benchmark App - Production Dockerfile
+FROM nginx:alpine
 
-FROM docker.bev.gv.at/node:22-alpine
+COPY dist /usr/share/nginx/html
 
-WORKDIR /app
+EXPOSE 80
 
-RUN npm install -g serve
-
-COPY dist /app/dist
-
-EXPOSE 3000
-
-CMD ["serve", "/app/dist", "-p", "3000"]
+CMD ["nginx", "-g", "daemon off;"]
