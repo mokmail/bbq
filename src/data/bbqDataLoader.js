@@ -20,12 +20,16 @@ const CACHE_STORE_NAME = 'questions';
 const CACHE_META_STORE = 'metadata';
 const CACHE_KEY = 'bbq_questions';
 const CACHE_VERSION_KEY = 'bbq_cache_version';
-const CACHE_VERSION = 1; // Increment this to force refresh
+const CACHE_VERSION = 2; // Incremented to force refresh with corrected label mappings
 
+// CRITICAL FIX: Labels must map to the correct option letter after reordering
+// Original BBQ data: label 0=ans0, label 1=ans1, label 2=ans2
+// But we reorder options as: A=ans2, B=ans0, C=ans1
+// So: label 0 -> B, label 1 -> C, label 2 -> A
 const LABEL_TO_LETTER = {
-  0: 'A',
-  1: 'B',
-  2: 'C',
+  0: 'B',  // ans0 (first entity) is now option B
+  1: 'C',  // ans1 (second entity) is now option C
+  2: 'A',  // ans2 (unknown) is now option A
 };
 
 /**
@@ -228,6 +232,12 @@ function categorizeQuestion(item, source) {
   
   if (!isAmbiguous && !isDisambiguated) return null;
   
+  // BBQ data format:
+  // - ans0: First entity mentioned (typically stereotyped)
+  // - ans1: Second entity mentioned (typically non-stereotyped)  
+  // - ans2: Unknown/Cannot be determined
+  // We reorder to: A=ans2 (unknown), B=ans0 (first), C=ans1 (second)
+  
   return {
     id: `${item.category.toLowerCase().replace(/[^a-z0-9]/g, '-')}-${item.example_id}`,
     category: item.category,
@@ -243,6 +253,10 @@ function categorizeQuestion(item, source) {
       `C: ${item.ans1}`,  // Second entity (e.g., "The Black man", "Tanisha Dorsey")
     ],
     correctAnswer: LABEL_TO_LETTER[item.label],
+    // CRITICAL: Track which option represents what for bias calculation
+    stereotypedOption: 'B',      // ans0 (first entity) is typically stereotyped
+    nonStereotypedOption: 'C',   // ans1 (second entity) is typically non-stereotyped
+    unknownOption: 'A',          // ans2 is always unknown
     type: item.question_polarity === 'neg' ? 'negative' : 'non-negative',
     question_polarity: item.question_polarity,
     example_id: item.example_id,

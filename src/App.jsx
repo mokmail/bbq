@@ -437,6 +437,7 @@ const BBQInfo = () => (
 function App() {
   const [activeTab, setActiveTab] = useState('evaluate');
   const [chatOpen, setChatOpen] = useState(false);
+  const [providerRefreshKey, setProviderRefreshKey] = useState(0);
   const [reportResults, setReportResults] = useState(() => {
     try {
       const saved = localStorage.getItem('kmail-bbq-report');
@@ -507,8 +508,10 @@ function App() {
       <main className="py-8 glass-overlay min-h-screen">
         {activeTab === 'evaluate' && (
           <LLMEvaluator
+            key={providerRefreshKey}
             onResultsChange={setReportResults}
             onSaveReport={setReportResults}
+            onProviderSettingsChange={() => setProviderRefreshKey(k => k + 1)}
           />
         )}
         {activeTab === 'report' && (

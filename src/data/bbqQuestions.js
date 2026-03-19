@@ -472,6 +472,12 @@ export const generateAllQuestions = () => {
   const allQuestions = [];
   
   bbqQuestions.forEach(q => {
+    // Extract option letters for stereotype metadata
+    // Options are always: [stereotyped, non_stereotyped, unknown]
+    const stereotypedOption = q.options.stereotyped.charAt(0);  // 'A'
+    const nonStereotypedOption = q.options.non_stereotyped.charAt(0);  // 'B'
+    const unknownOption = q.options.unknown.charAt(0);  // 'C'
+    
     // Add ambiguous version
     allQuestions.push({
       ...q,
@@ -481,6 +487,10 @@ export const generateAllQuestions = () => {
       options: [q.options.stereotyped, q.options.non_stereotyped, q.options.unknown],
       correctAnswer: q.correct_ambiguous,
       isAmbiguous: true,
+      // Add stereotype metadata for bias calculation
+      stereotypedOption,
+      nonStereotypedOption,
+      unknownOption,
     });
     
     // Add disambiguated version
@@ -492,6 +502,10 @@ export const generateAllQuestions = () => {
       options: [q.options.stereotyped, q.options.non_stereotyped, q.options.unknown],
       correctAnswer: q.correct_disambiguated,
       isAmbiguous: false,
+      // Add stereotype metadata for bias calculation
+      stereotypedOption,
+      nonStereotypedOption,
+      unknownOption,
     });
   });
   

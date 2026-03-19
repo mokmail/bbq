@@ -1243,3 +1243,6 @@ export {
   formatPercent,
   CHART_COLORS
 };
+
+// Import and re-export enhanced comparison components
+export { EnhancedResultsComparison, QuestionResultsDetailed } from './EnhancedResultsComparison';

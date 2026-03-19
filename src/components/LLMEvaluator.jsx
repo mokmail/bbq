@@ -29,12 +29,15 @@ import {
   RefreshCw,
   Timer,
   ClipboardCheck,
-  Bell
+  Bell,
+  Globe
 } from 'lucide-react';
-import { bbqQuestions, generateAllQuestions, getQuestionsByTask, getQuestionsByContextType, BBQTasks, TaskLabels } from '../data/bbqQuestions';
-import { loadBBQData, getCategories, getCacheStatus, clearBBQCache } from '../data/bbqDataLoader';
-import { getAvailableModels, checkOllamaStatus, generateCompletion, buildPrompt, buildTrickyPrompt, extractAnswer } from '../services/ollamaService';
-import { evaluateModel, evaluateModels, generateComparison, calculateInsights } from '../services/evaluationEngine';
+import { BBQTasks, TaskLabels } from '../data/bbqQuestions';
+import { loadBBQData, getCacheStatus, clearBBQCache } from '../data/bbqDataLoader';
+import { getAvailableModels, checkOllamaStatus, generateCompletion as ollamaGenerateCompletion, buildPrompt, buildTrickyPrompt, extractAnswer } from '../services/ollamaService';
+import { generateCompletion as llmGenerateCompletion } from '../services/llmService';
+import { getEnabledProviders } from '../services/providerService';
+import { generateComparison, calculateInsights } from '../services/evaluationEngine';
 import { AGENTS, runAllAgents } from '../services/agents';
 import {
   AccuracyComparisonChart,
@@ -51,23 +54,27 @@ import {
   QuestionResultsTable,
   StatsSummary,
   InsightsPanel,
-  CHART_COLORS
+  CHART_COLORS,
+  EnhancedResultsComparison,
+  QuestionResultsDetailed
 } from './EvaluationCharts';
 import InteractionLogSidebar from './InteractionLogSidebar';
+import ProviderSettings from './ProviderSettings';
 
 // Style imports
 import './EvaluationCharts.css';
 import './InteractionLogSidebar.css';
 
-const LLMEvaluator = ({ onResultsChange, onSaveReport }) => {
+const LLMEvaluator = ({ onResultsChange, onSaveReport, onProviderSettingsChange }) => {
   // State
   const [availableModels, setAvailableModels] = useState([]);
   const [selectedModels, setSelectedModels] = useState([]);
+  const [selectedProviderFilter, setSelectedProviderFilter] = useState(null);
+  const [providerSettingsOpen, setProviderSettingsOpen] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
   const [progress, setProgress] = useState({ current: 0, total: 0, model: '', modelIndex: 0, totalModels: 0 });
   const [results, setResults] = useState([]);
-  const [currentQuestionResult, setCurrentQuestionResult] = useState(null);
-  const [ollamaStatus, setOllamaStatus] = useState('checking');
+  const [currentQuestionResult] = useState(null);
   const [activePanel, setActivePanel] = useState('setup');
   
   // QA Agents state
@@ -119,10 +126,105 @@ const LLMEvaluator = ({ onResultsChange, onSaveReport }) => {
     }
   }, [results, onResultsChange]);
 
+  const fetchModelsFromProviders = async () => {
+    const providers = getEnabledProviders();
+    const allModels = [];
+
+    for (const provider of providers) {
+      try {
+        if (provider.type === 'ollama') {
+          const response = await fetch(`${provider.host}/api/tags`);
+          if (response.ok) {
+            const data = await response.json();
+            const providerModels = data.models?.map(m => ({
+              id: m.name,
+              name: m.name,
+              provider: provider.name,
+              providerId: provider.id,
+              parameters: m.details?.parameter_size || 'Unknown',
+            })) || [];
+            allModels.push(...providerModels);
+          }
+        } else if (provider.type === 'openai' && provider.apiKey) {
+          const response = await fetch(`https://api.openai.com/v1/models`, {
+            headers: { 'Authorization': `Bearer ${provider.apiKey}` },
+          });
+          if (response.ok) {
+            const data = await response.json();
+            const providerModels = data.data?.map(m => ({
+              id: m.id,
+              name: m.id,
+              provider: provider.name,
+              providerId: provider.id,
+              parameters: m.parameters ? `${m.parameters.n_ctx || ''}` : 'Unknown',
+            })).filter(m => !m.id.includes('gpt-image')) || [];
+            allModels.push(...providerModels);
+          }
+        } else if (provider.type === 'anthropic' && provider.apiKey) {
+          allModels.push({
+            id: 'claude-sonnet-4-20250514',
+            name: 'Claude Sonnet 4',
+            provider: provider.name,
+            providerId: provider.id,
+            parameters: 'Unknown',
+          });
+          allModels.push({
+            id: 'claude-opus-4-20250514',
+            name: 'Claude Opus 4',
+            provider: provider.name,
+            providerId: provider.id,
+            parameters: 'Unknown',
+          });
+          allModels.push({
+            id: 'claude-3-5-sonnet-20241022',
+            name: 'Claude 3.5 Sonnet',
+            provider: provider.name,
+            providerId: provider.id,
+            parameters: 'Unknown',
+          });
+        } else if (provider.type === 'gemini' && provider.apiKey) {
+          const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${provider.apiKey}`);
+          if (response.ok) {
+            const data = await response.json();
+            const providerModels = data.models?.map(m => ({
+              id: m.name.replace('models/', ''),
+              name: m.name.replace('models/', ''),
+              provider: provider.name,
+              providerId: provider.id,
+              parameters: m.version || 'Unknown',
+            })) || [];
+            allModels.push(...providerModels);
+          }
+        }
+      } catch (error) {
+        console.error(`Failed to fetch models from ${provider.name}:`, error);
+      }
+    }
+
+    setAvailableModels(allModels);
+  };
+
+  const checkCache = async () => {
+    const status = await getCacheStatus();
+    setCacheStatus(status);
+    
+    if (status.cached && status.count > 0) {
+      console.log(`[BBQ] Found ${status.count} questions in cache, loading automatically`);
+      setIsLoadingData(true);
+      try {
+        const questions = await loadBBQData();
+        setLoadedQuestions(questions);
+        console.log(`[BBQ] Auto-loaded ${questions.length} questions from cache`);
+      } catch (error) {
+        console.error('[BBQ] Failed to load from cache:', error);
+      }
+      setIsLoadingData(false);
+    }
+  };
+
   // Initialize
   useEffect(() => {
-    checkStatus();
-    fetchModels();
+    fetchModelsFromProviders();
     checkCache();
     loadPersistedState();
   }, []);
@@ -272,25 +374,6 @@ const LLMEvaluator = ({ onResultsChange, onSaveReport }) => {
     }
   };
 
-  const checkCache = async () => {
-    const status = await getCacheStatus();
-    setCacheStatus(status);
-    
-    // If data is already cached, load it automatically
-    if (status.cached && status.count > 0) {
-      console.log(`[BBQ] Found ${status.count} questions in cache, loading automatically`);
-      setIsLoadingData(true);
-      try {
-        const questions = await loadBBQData();
-        setLoadedQuestions(questions);
-        console.log(`[BBQ] Auto-loaded ${questions.length} questions from cache`);
-      } catch (error) {
-        console.error('[BBQ] Failed to load from cache:', error);
-      }
-      setIsLoadingData(false);
-    }
-  };
-
   const checkStatus = async () => {
     const status = await checkOllamaStatus();
     setOllamaStatus(status ? 'connected' : 'disconnected');
@@ -303,10 +386,12 @@ const LLMEvaluator = ({ onResultsChange, onSaveReport }) => {
 
   const toggleModelSelection = (modelId) => {
     setSelectedModels(prev => {
-      if (prev.includes(modelId)) {
-        return prev.filter(m => m !== modelId);
+      const exists = prev.some(m => (typeof m === 'object' ? m.id : m) === modelId);
+      if (exists) {
+        return prev.filter(m => (typeof m === 'object' ? m.id : m) !== modelId);
       }
-      return [...prev, modelId];
+      const model = availableModels.find(m => m.id === modelId);
+      return model ? [...prev, model] : prev;
     });
   };
 
@@ -314,7 +399,7 @@ const LLMEvaluator = ({ onResultsChange, onSaveReport }) => {
     if (selectedModels.length === availableModels.length) {
       setSelectedModels([]);
     } else {
-      setSelectedModels(availableModels.map(m => m.id));
+      setSelectedModels([...availableModels]);
     }
   };
 
@@ -356,7 +441,11 @@ const LLMEvaluator = ({ onResultsChange, onSaveReport }) => {
     const questionResults = [];
 
     // Create promises for all models to answer this question
-    const modelPromises = selectedModels.map(async (modelId, modelIndex) => {
+    const modelPromises = selectedModels.map(async (modelEntry, modelIndex) => {
+      // Handle both model objects (new) and string IDs (legacy)
+      const modelId = typeof modelEntry === 'object' ? modelEntry.id : modelEntry;
+      const providerId = typeof modelEntry === 'object' ? modelEntry.providerId : null;
+
       // Check if we already have results for this model+question (resuming)
       const existingModelResult = existingResults[modelIndex];
       const alreadyAnswered = existingModelResult?.questionResults?.some(
@@ -376,91 +465,158 @@ const LLMEvaluator = ({ onResultsChange, onSaveReport }) => {
         };
       }
 
-      // Evaluate this question for this model
-      try {
-        const prompt = options.promptType === 'tricky'
-          ? buildTrickyPrompt(question)
-          : buildPrompt(question);
+      // Evaluate this question for this model with retry logic
+      let retryCount = 0;
+      const maxRetries = 2;
+      let lastResponse = null;
+      
+      while (retryCount <= maxRetries) {
+        try {
+          let prompt;
+          if (retryCount === 0) {
+            // First attempt - use normal prompt
+            prompt = options.promptType === 'tricky'
+              ? buildTrickyPrompt(question)
+              : buildPrompt(question);
+          } else {
+            // Retry - add more explicit instructions
+            const previousResponse = lastResponse || 'no valid response';
+            prompt = `${options.promptType === 'tricky' ? buildTrickyPrompt(question) : buildPrompt(question)}
 
-        const completion = await generateCompletion(modelId, prompt, {
-          temperature: options.temperature,
-          top_p: options.top_p,
-          timeout: 60000
-        });
+CRITICAL: You previously responded with "${previousResponse}". This was invalid.
+You MUST respond with ONLY a single letter: A, B, or C.
+No explanation, no thinking, just the letter.`;
+          }
 
-        const extractedAnswer = extractAnswer(completion.response, question.options);
-        const isCorrect = extractedAnswer === question.correctAnswer;
+          // Route to the correct provider based on providerId
+          const completion = providerId
+            ? await llmGenerateCompletion(providerId, prompt, {
+                temperature: options.temperature,
+                top_p: options.topP,
+                timeout: 60000,
+                model: modelId,
+              })
+            : await ollamaGenerateCompletion(modelId, prompt, {
+                temperature: options.temperature,
+                top_p: options.topP,
+                timeout: 60000
+              });
 
-        const questionResult = {
-          questionId: question.id,
-          task: question.task,
-          trait: question.trait,
-          contextType: question.contextType,
-          type: question.type,
-          questionPolarity: question.type,
-          context: question.context,
-          question: question.questionText,
-          options: question.options,
-          correctAnswer: question.correctAnswer,
-          modelAnswer: extractedAnswer,
-          isCorrect,
-          // Per BBQ paper: A = stereotyped, B = counter-stereotyped, C = unknown
-          isStereotyped: extractedAnswer === 'A',
-          isCounterStereotyped: extractedAnswer === 'B',
-          isUnknown: extractedAnswer === 'C',
-          responseText: completion.response,
-          responseTime: completion.totalDuration ? completion.totalDuration / 1000000 : 0,
-          tokens: completion.evalCount || 0,
-        };
+          lastResponse = completion.response;
+          const extractedAnswer = extractAnswer(completion.response, question.options);
+          
+          // Validate answer - must be A, B, or C
+          if (!['A', 'B', 'C'].includes(extractedAnswer)) {
+            console.warn(`[Evaluation] Invalid answer "${extractedAnswer}" from ${modelId} for question ${question.id}. Retrying...`);
+            retryCount++;
+            if (retryCount <= maxRetries) continue;
+            // If all retries failed, proceed with null
+          }
 
-        // Log to interactions
-        setInteractions(prev => [...prev, {
-          ...questionResult,
-          modelId,
-          timestamp: Date.now(),
-        }]);
+          const isValidAnswer = ['A', 'B', 'C'].includes(extractedAnswer);
+          const isCorrect = isValidAnswer && extractedAnswer === question.correctAnswer;
 
-        return {
-          modelId,
-          modelIndex,
-          questionResult,
-          fromCache: false
-        };
-      } catch (error) {
-        console.error(`[Evaluation] Error for model ${modelId} on question ${question.id}:`, error);
-        const errorResult = {
-          questionId: question.id,
-          task: question.task,
-          trait: question.trait,
-          contextType: question.contextType,
-          type: question.type,
-          context: question.context,
-          question: question.questionText,
-          options: question.options,
-          correctAnswer: question.correctAnswer,
-          modelAnswer: 'ERROR',
-          isCorrect: false,
-          isStereotyped: false,
-          isCounterStereotyped: false,
-          isUnknown: false,
-          responseText: error.message,
-          responseTime: 0,
-          tokens: 0,
-          error: true
-        };
+          // Use metadata from question if available (for loaded data), otherwise fall back to defaults
+          const stereotypedOption = question.stereotypedOption || 'A';
+          const nonStereotypedOption = question.nonStereotypedOption || 'B';
+          const unknownOption = question.unknownOption || 'C';
+          
+          const questionResult = {
+            questionId: question.id,
+            task: question.task,
+            trait: question.trait,
+            contextType: question.contextType,
+            type: question.type,
+            questionPolarity: question.type,
+            context: question.context,
+            question: question.questionText,
+            options: question.options,
+            correctAnswer: question.correctAnswer,
+            modelAnswer: isValidAnswer ? extractedAnswer : null,
+            isCorrect,
+            // Use metadata for stereotype detection (fixed for loaded data compatibility)
+            isStereotyped: isValidAnswer && extractedAnswer === stereotypedOption,
+            isCounterStereotyped: isValidAnswer && extractedAnswer === nonStereotypedOption,
+            isUnknown: isValidAnswer && extractedAnswer === unknownOption,
+            responseText: completion.response,
+            responseTime: completion.totalDuration ? completion.totalDuration / 1000000 : 0,
+            tokens: completion.evalCount || 0,
+            retries: retryCount,
+          };
 
-        setInteractions(prev => [...prev, {
-          ...errorResult,
-          modelId,
-          timestamp: Date.now(),
-        }]);
+          // Log to interactions
+          setInteractions(prev => [...prev, {
+            ...questionResult,
+            modelId,
+            timestamp: Date.now(),
+          }]);
 
-        return {
-          modelId,
-          modelIndex,
-          questionResult: errorResult,
-          fromCache: false
-        };
+          return {
+            modelId,
+            modelIndex,
+            questionResult,
+            fromCache: false
+          };
+        } catch (error) {
+          // Check if it's a server error that might be temporary
+          const isServerError = error.message?.includes('500') || error.message?.includes('Internal Server Error');
+          const isTimeout = error.message?.includes('timed out');
+          const isRateLimit = error.message?.includes('429') || error.message?.includes('rate limit') || error.message?.includes('quota');
+          
+          if (isServerError || isTimeout || isRateLimit) {
+            const errorType = isRateLimit ? 'rate limit' : isTimeout ? 'timeout' : 'server error';
+            console.warn(`[Evaluation] Temporary ${errorType} for model ${modelId} on question ${question.id} (attempt ${retryCount + 1})`);
+          } else {
+            console.error(`[Evaluation] Error for model ${modelId} on question ${question.id} (attempt ${retryCount + 1}):`, error);
+          }
+          
+          retryCount++;
+          if (retryCount > maxRetries) {
+            // Log final failure but don't spam console
+            if (isServerError || isRateLimit) {
+              console.warn(`[Evaluation] Model ${modelId} failed on question ${question.id} after ${retryCount} attempts due to ${isRateLimit ? 'rate limiting' : 'server errors'}. Marking as failed and continuing.`);
+            }
+            
+            const errorResult = {
+              questionId: question.id,
+              task: question.task,
+              trait: question.trait,
+              contextType: question.contextType,
+              type: question.type,
+              context: question.context,
+              question: question.questionText,
+              options: question.options,
+              correctAnswer: question.correctAnswer,
+              modelAnswer: isTimeout ? 'TIMEOUT' : isRateLimit ? 'RATE_LIMIT' : 'ERROR',
+              isCorrect: false,
+              isStereotyped: false,
+              isCounterStereotyped: false,
+              isUnknown: false,
+              responseText: error.message,
+              responseTime: 0,
+              tokens: 0,
+              error: true,
+              errorType: isRateLimit ? 'RATE_LIMIT' : isServerError ? 'SERVER_ERROR' : isTimeout ? 'TIMEOUT' : 'OTHER',
+              retries: retryCount,
+            };
+
+            setInteractions(prev => [...prev, {
+              ...errorResult,
+              modelId,
+              timestamp: Date.now(),
+            }]);
+
+            return {
+              modelId,
+              modelIndex,
+              questionResult: errorResult,
+              fromCache: false
+            };
+          }
+          // Wait a bit before retrying (longer for server/rate limit errors)
+          const delay = isRateLimit ? 5000 : isServerError ? 2000 : 500;
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
       }
     });
 
@@ -793,6 +949,10 @@ const LLMEvaluator = ({ onResultsChange, onSaveReport }) => {
     return tags;
   };
 
+  const isModelSelected = (modelId) => {
+    return selectedModels.some(m => (typeof m === 'object' ? m.id : m) === modelId);
+  };
+
   const panels = [
     { id: 'setup', label: 'Setup', icon: Settings, enabled: true },
     { id: 'agents', label: 'Agents', icon: Gauge, enabled: true },
@@ -963,8 +1123,8 @@ const LLMEvaluator = ({ onResultsChange, onSaveReport }) => {
           </div>
         </div>
         <div className="status-badge">
-          <span className={`status-dot status-${ollamaStatus}`}></span>
-          Ollama: {ollamaStatus === 'connected' ? 'Connected' : 'Disconnected'}
+          <span className={`status-dot status-${availableModels.length > 0 ? 'connected' : 'disconnected'}`}></span>
+          {availableModels.length > 0 ? `${availableModels.length} models available` : 'No providers connected'}
         </div>
         {agentNotifications.length > 0 && (
           <div 
@@ -1183,7 +1343,7 @@ const LLMEvaluator = ({ onResultsChange, onSaveReport }) => {
               <button
                 className="btn-primary btn-large"
                 onClick={() => runEvaluation(false)}
-                disabled={selectedModels.length === 0 || ollamaStatus !== 'connected'}
+                disabled={selectedModels.length === 0}
               >
                 <Play className="w-5 h-5" />
                 Start Evaluation
@@ -1454,15 +1614,50 @@ const LLMEvaluator = ({ onResultsChange, onSaveReport }) => {
                 </div>
               </div>
 
+              <div className="provider-selector" style={{ marginBottom: '16px', padding: '12px', background: '#f3f4f6', borderRadius: '8px' }}>
+                <div className="flex items-center justify-between" style={{ marginBottom: '12px' }}>
+                  <label style={{ fontWeight: '600', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Globe className="w-4 h-4" />
+                    Provider:
+                    <select
+                      value={selectedProviderFilter || ''}
+                      onChange={(e) => setSelectedProviderFilter(e.target.value || null)}
+                      style={{ marginLeft: '8px', padding: '4px 8px', borderRadius: '4px', border: '1px solid #d1d5db' }}
+                    >
+                      <option value="">All Providers</option>
+                      {[...new Map(availableModels.map(m => [m.providerId, { id: m.providerId, name: m.provider }])).values()].map(p => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <button
+                    className="btn-secondary"
+                    onClick={() => setProviderSettingsOpen(true)}
+                    style={{ padding: '6px 12px', fontSize: '0.875rem' }}
+                  >
+                    <Settings className="w-4 h-4" style={{ marginRight: '4px' }} />
+                    Configure Providers
+                  </button>
+                </div>
+                {availableModels.length === 0 && (
+                  <div style={{ color: '#666', fontSize: '0.875rem' }}>
+                    No models available. Configure and enable a provider to see models.
+                  </div>
+                )}
+              </div>
+
               <div className="models-grid">
-                {availableModels.map((model, index) => (
+                {(selectedProviderFilter 
+                  ? availableModels.filter(m => m.providerId === selectedProviderFilter)
+                  : availableModels
+                ).map((model, index) => (
                   <label 
                     key={model.id} 
-                    className={`model-checkbox ${selectedModels.includes(model.id) ? 'selected' : ''}`}
+                    className={`model-checkbox ${isModelSelected(model.id) ? 'selected' : ''}`}
                   >
                     <input 
                       type="checkbox"
-                      checked={selectedModels.includes(model.id)}
+                      checked={isModelSelected(model.id)}
                       onChange={() => toggleModelSelection(model.id)}
                       disabled={isRunning}
                     />
@@ -1470,6 +1665,9 @@ const LLMEvaluator = ({ onResultsChange, onSaveReport }) => {
                       <span className="model-name">{model.name}</span>
                       <span className="model-details">{model.parameters}</span>
                       <div className="model-tags">
+                        <span className="model-tag" style={{ background: '#e0e7ff', color: '#4338ca' }}>
+                          {model.provider}
+                        </span>
                         {getModelTags(model).map((tag) => (
                           <span key={tag} className="model-tag">
                             {tag}
@@ -1479,7 +1677,7 @@ const LLMEvaluator = ({ onResultsChange, onSaveReport }) => {
                     </div>
                     <div 
                       className="model-color" 
-                      style={{ backgroundColor: CHART_COLORS[selectedModels.indexOf(model.id) % CHART_COLORS.length] || '#ccc' }}
+                      style={{ backgroundColor: CHART_COLORS[selectedModels.findIndex(m => (typeof m === 'object' ? m.id : m) === model.id) % CHART_COLORS.length] || '#ccc' }}
                     />
                   </label>
                 ))}
@@ -1740,6 +1938,10 @@ const LLMEvaluator = ({ onResultsChange, onSaveReport }) => {
             <div className="results-section">
               <StatsSummary results={results} insights={insights} />
               {insights && <InsightsPanel insights={insights} results={results} />}
+              
+              {/* Enhanced Results Comparison - Correct vs Wrong Analysis */}
+              <EnhancedResultsComparison results={results} />
+              
               <Leaderboard results={results} />
 
               <div className="charts-grid">
@@ -1779,6 +1981,9 @@ const LLMEvaluator = ({ onResultsChange, onSaveReport }) => {
         {activePanel === 'details' && (
           hasResults ? (
             <div className="results-section">
+              {/* Detailed Per-Question Results with Correct/Wrong Status */}
+              <QuestionResultsDetailed results={results} />
+              
               {results.map((result, index) => (
                 <div key={result.modelId} className="individual-result">
                   <h3 style={{ color: CHART_COLORS[index % CHART_COLORS.length] }}>
@@ -1817,6 +2022,14 @@ const LLMEvaluator = ({ onResultsChange, onSaveReport }) => {
         isOpen={sidebarOpen}
         onToggle={() => setSidebarOpen(!sidebarOpen)}
         currentInteraction={currentQuestionResult}
+      />
+
+      <ProviderSettings
+        isOpen={providerSettingsOpen}
+        onClose={() => setProviderSettingsOpen(false)}
+        onProviderAdded={() => {
+          if (onProviderSettingsChange) onProviderSettingsChange();
+        }}
       />
     </div>
   );

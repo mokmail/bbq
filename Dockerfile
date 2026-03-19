@@ -1,4 +1,4 @@
-FROM docker.bev.gv.at/nginx:alpine
+FROM nginx:alpine
 
 COPY dist /usr/share/nginx/html
 
