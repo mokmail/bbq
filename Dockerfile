@@ -1,6 +1,6 @@
 # BBQ Benchmark App - Production Dockerfile
 
-FROM https://docker.bev.gv.at/node:22-alpine
+FROM docker.bev.gv.at/node:22-alpine
 
 WORKDIR /app
 
