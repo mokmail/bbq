@@ -11,8 +11,6 @@ README.md
 .env.development
 .env.test
 .env.production
-dist
-build
 coverage
 .vscode
 .idea
