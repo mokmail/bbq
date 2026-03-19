@@ -935,7 +935,28 @@ const LLMEvaluator = ({ onResultsChange, onSaveReport }) => {
       {/* Header */}
       <div className="evaluator-header">
         <div className="flex items-center gap-3">
-          <Brain className="w-8 h-8 text-blue-600" />
+          <div className="ai-graphic">
+            <div className="ai-graphic-core"></div>
+            <div className="ai-graphic-ring"></div>
+            <div className="ai-graphic-ring"></div>
+            <div className="ai-graphic-ring"></div>
+            <div className="ai-graphic-node"></div>
+            <div className="ai-graphic-node"></div>
+            <div className="ai-graphic-node"></div>
+            <div className="ai-graphic-node"></div>
+            <div className="ai-graphic-node"></div>
+            <div className="ai-graphic-node"></div>
+            <div className="ai-graphic-node"></div>
+            <div className="ai-graphic-node"></div>
+            <div className="ai-graphic-connection"></div>
+            <div className="ai-graphic-connection"></div>
+            <div className="ai-graphic-connection"></div>
+            <div className="ai-graphic-connection"></div>
+            <div className="ai-graphic-connection"></div>
+            <div className="ai-graphic-connection"></div>
+            <div className="ai-graphic-connection"></div>
+            <div className="ai-graphic-connection"></div>
+          </div>
           <div>
             <h1>LLM Model Evaluator</h1>
             <p>Evaluate Ollama models on BBQ Bias Benchmark</p>

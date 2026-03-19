@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:prod": "vite build && rm -rf prod && cp -r dist prod",
+    "serve:prod": "npx serve prod -p 3000",
     "lint": "eslint .",
     "preview": "vite preview"
   },
