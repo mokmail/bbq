@@ -14,6 +14,7 @@ import {
   Zap,
 } from 'lucide-react';
 import './EvaluationStage.css';
+import { t, useLang } from '../services/i18n';
 
 /**
  * The animated "what is happening right now" stage shown while an evaluation runs.
@@ -54,15 +55,15 @@ const EMPTY_BOARD = {
 };
 
 const STATUS_META = {
-  waiting: { label: 'Queued', tone: 'idle', step: 0 },
-  asking: { label: 'Asking the model…', tone: 'active', step: 1 },
-  retrying: { label: 'Retrying (bad answer)', tone: 'warn', step: 1 },
-  scored: { label: 'Scored', tone: 'done', step: 3 },
-  failed: { label: 'Failed', tone: 'error', step: 3 },
-  cancelled: { label: 'Cancelled', tone: 'warn', step: 1 },
+  waiting: { labelKey: 'stage.status.waiting', tone: 'idle', step: 0 },
+  asking: { labelKey: 'stage.status.asking', tone: 'active', step: 1 },
+  retrying: { labelKey: 'stage.status.retrying', tone: 'warn', step: 1 },
+  scored: { labelKey: 'stage.status.scored', tone: 'done', step: 3 },
+  failed: { labelKey: 'stage.status.failed', tone: 'error', step: 3 },
+  cancelled: { labelKey: 'stage.status.cancelled', tone: 'warn', step: 1 },
 };
 
-const STEPS = ['Send prompt', 'Wait for model', 'Parse answer', 'Score bias'];
+const STEP_KEYS = ['stage.step.send', 'stage.step.wait', 'stage.step.parse', 'stage.step.score'];
 
 /** Options arrive as "A: text"; be forgiving about the separator. */
 const parseOption = (raw) => {
@@ -85,11 +86,11 @@ const shortModelName = (modelId) => String(modelId || '').split(':')[0].split('/
 const signed = (value) => (value > 0 ? `+${value.toFixed(2)}` : value.toFixed(2));
 
 const EvaluationStage = ({ board, running, results = [] }) => {
+  useLang();
   const live = board || EMPTY_BOARD;
   const models = useMemo(() => live.models || [], [live.models]);
   const [now, setNow] = useState(() => Date.now());
   const feedRef = useRef(null);
-
   // Smooth clock for the header timer / live latency read-out.
   useEffect(() => {
     if (!running) return undefined;
@@ -164,7 +165,7 @@ const EvaluationStage = ({ board, running, results = [] }) => {
       <div className="eval-stage eval-stage-idle">
         <div className="es-idle-inner">
           <Loader2 className="es-spin w-6 h-6" />
-          <span>Preparing the first question…</span>
+          <span>{t('stage.preparing')}</span>
         </div>
       </div>
     );
@@ -176,20 +177,20 @@ const EvaluationStage = ({ board, running, results = [] }) => {
       <div className="es-header">
         <div className="es-header-left">
           <span className={`es-live-dot ${running ? 'on' : 'off'}`} />
-          <span className="es-header-title">{running ? 'Evaluation running' : 'Last question'}</span>
+          <span className="es-header-title">{running ? t('stage.running') : t('stage.lastQuestion')}</span>
           {live.source && <span className="es-tag">{live.source}</span>}
           {live.contextType && (
             <span className={`es-tag es-tag-context ${live.contextType}`}>
-              {live.contextType === 'ambiguous' ? 'ambiguous — answer should be “Unknown”' : 'disambiguated — answer is in the text'}
+              {live.contextType === 'ambiguous' ? t('stage.ambTag') : t('stage.disTag')}
             </span>
           )}
         </div>
         <div className="es-header-right">
-          <span className="es-clock" title="Time on this question">
+          <span className="es-clock" title={t('stage.timeOnQuestion')}>
             <Timer className="w-4 h-4" />
             {formatClock(elapsedMs)}
           </span>
-          <span className="es-ring" title={`Question ${live.questionIndex} of ${total}`}>
+          <span className="es-ring" title={t('stage.questionOf', { a: live.questionIndex, b: total })}>
             <svg viewBox="0 0 44 44">
               <circle className="es-ring-track" cx="22" cy="22" r="18" />
               <circle
@@ -209,7 +210,7 @@ const EvaluationStage = ({ board, running, results = [] }) => {
       </div>
 
       {/* ---------------------------------------------------- run progress strip */}
-      <div className="es-runbar" title="Overall run progress">
+      <div className="es-runbar" title={t('stage.runProgress')}>
         <div className="es-runbar-track">
           <div
             className={`es-runbar-fill ${running ? 'animated' : ''}`}
@@ -218,9 +219,9 @@ const EvaluationStage = ({ board, running, results = [] }) => {
         </div>
         <span className="es-runbar-caption">
           {total > 0
-            ? <>Question <b>{live.questionIndex}</b> of <b>{total}</b> · {Math.round((live.questionIndex / total) * 100)}% of the run</>
-            : 'Waiting for the first question…'}
-          {asking > 0 && running && <> · {asking} model{asking > 1 ? 's' : ''} answering</>}
+            ? t('stage.qOf', { a: live.questionIndex, b: total, p: Math.round((live.questionIndex / total) * 100) })
+            : t('stage.waitingFirst')}
+          {asking > 0 && running && <> · {t('stage.answering', { n: asking })}</>}
         </span>
       </div>
 
@@ -229,12 +230,12 @@ const EvaluationStage = ({ board, running, results = [] }) => {
         <section className="es-panel es-question-panel">
           <div className="es-panel-label">
             <Zap className="w-4 h-4" />
-            What the model is being asked
+            {t('stage.whatAsked')}
           </div>
 
           {live.context && (
             <div className="es-context">
-              <span className="es-context-label">Context</span>
+              <span className="es-context-label">{t('stage.context')}</span>
               <p key={`${live.questionIndex}-ctx`} className="es-typed">{live.context}</p>
             </div>
           )}
@@ -260,7 +261,7 @@ const EvaluationStage = ({ board, running, results = [] }) => {
                     <span className="es-option-letter">{option.letter}</span>
                     <span className="es-option-text">{option.text}</span>
                     {isCorrect && (
-                      <span className="es-option-crown" title="Correct answer">
+                      <span className="es-option-crown" title={t('stage.correctAnswer')}>
                         <Crown className="w-4 h-4" />
                       </span>
                     )}
@@ -272,7 +273,9 @@ const EvaluationStage = ({ board, running, results = [] }) => {
                         <span
                           key={model.modelId}
                           className={`es-chip ${model.isCorrect ? 'correct' : 'wrong'}`}
-                          title={`${model.modelId} chose ${option.letter || 'no letter'}`}
+                          title={option.letter
+                            ? t('stage.chose', { model: model.modelId, letter: option.letter })
+                            : t('stage.choseNo', { model: model.modelId })}
                         >
                           {model.isCorrect ? <CheckCircle className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
                           {shortModelName(model.modelId)}
@@ -282,7 +285,7 @@ const EvaluationStage = ({ board, running, results = [] }) => {
                   )}
 
                   {allSettled && role && (
-                    <div className={`es-option-role role-${role.key}`}>{role.label}</div>
+                    <div className={`es-option-role role-${role.key}`}>{t(role.labelKey)}</div>
                   )}
                 </div>
               );
@@ -292,8 +295,7 @@ const EvaluationStage = ({ board, running, results = [] }) => {
           {allSettled && (
             <div className="es-verdict">
               <CheckCircle className="w-4 h-4" />
-              {settled} of {models.length} models answered · correct option is{' '}
-              <strong>{live.correctAnswer}</strong>
+              {t('stage.answered', { a: settled, b: models.length, c: live.correctAnswer })}
             </div>
           )}
         </section>
@@ -303,12 +305,12 @@ const EvaluationStage = ({ board, running, results = [] }) => {
           <div className="es-panel-label">
             <Bot className="w-4 h-4" />
             {cancelled > 0
-              ? `Stopped — ${cancelled} request${cancelled > 1 ? 's' : ''} cancelled`
+              ? t('stage.stopped', { n: cancelled })
               : asking > 0
-                ? `${asking} model${asking > 1 ? 's' : ''} working`
-                : 'Background tasks'}
+                ? t('stage.working', { n: asking })
+                : t('stage.backgroundTasks')}
             <span className="es-panel-count">
-              {settled}/{models.length} done
+              {t('stage.done', { a: settled, b: models.length })}
             </span>
           </div>
 
@@ -330,20 +332,20 @@ const EvaluationStage = ({ board, running, results = [] }) => {
                       {model.status === 'scored' && !model.isCorrect && <XCircle className="w-3 h-3" />}
                       {model.status === 'failed' && <AlertTriangle className="w-3 h-3" />}
                       {model.status === 'cancelled' && <Pause className="w-3 h-3" />}
-                      {model.status === 'retrying' ? `Retry ${model.attempt}` : meta.label}
+                      {model.status === 'retrying' ? t('stage.retry', { n: model.attempt }) : t(meta.labelKey)}
                     </span>
 
                     {model.status === 'scored' && (
                       <span className="es-lane-metrics">
                         {model.answer && <b>{model.answer}</b>}
                         {model.latency > 0 && <span>{(model.latency / 1000).toFixed(2)}s</span>}
-                        {model.tokens > 0 && <span>{model.tokens} tok</span>}
+                        {model.tokens > 0 && <span>{model.tokens} {t('stage.tok')}</span>}
                       </span>
                     )}
                   </div>
 
                   <div className="es-steps">
-                    {STEPS.map((step, index) => {
+                    {STEP_KEYS.map((stepKey, index) => {
                       const isDone = index < meta.step;
                       const isCurrent =
                         index === meta.step && model.status !== 'scored' && model.status !== 'failed';
@@ -351,12 +353,12 @@ const EvaluationStage = ({ board, running, results = [] }) => {
                       if (isDone) classes.push('done');
                       if (isCurrent) classes.push('current');
                       return (
-                        <span key={step} className={classes.join(' ')} title={step}>
+                        <span key={stepKey} className={classes.join(' ')} title={t(stepKey)}>
                           <i />
                         </span>
                       );
                     })}
-                    <span className="es-step-caption">{STEPS[Math.min(meta.step, STEPS.length - 1)]}</span>
+                    <span className="es-step-caption">{t(STEP_KEYS[Math.min(meta.step, STEP_KEYS.length - 1)])}</span>
                   </div>
                 </div>
               );
@@ -368,8 +370,8 @@ const EvaluationStage = ({ board, running, results = [] }) => {
         <section className="es-panel es-results-panel">
           <div className="es-panel-label">
             <TrendingUp className="w-4 h-4" />
-            Running results
-            <span className="es-panel-count">live</span>
+            {t('stage.runningResults')}
+            <span className="es-panel-count">{t('stage.live')}</span>
           </div>
 
           <div className="es-results">
@@ -378,17 +380,17 @@ const EvaluationStage = ({ board, running, results = [] }) => {
                 <div className="es-result-head">
                   <span className="es-result-name" title={stat.modelId}>{shortModelName(stat.modelId)}</span>
                   <span className="es-result-nums">
-                    <b>{stat.correct}</b>/{stat.answered} correct
+                    <b>{stat.correct}</b>/{stat.answered} {t('stage.correct')}
                   </span>
                 </div>
                 <div className="es-result-bars">
-                  <div className="es-meter" title={`Accuracy so far: ${stat.accuracy.toFixed(1)}%`}>
+                  <div className="es-meter" title={t('stage.accTitle', { p: stat.accuracy.toFixed(1) })}>
                     <div className="es-meter-accuracy" style={{ width: `${Math.min(100, stat.accuracy)}%` }} />
-                    <span className="es-meter-label">acc {stat.accuracy.toFixed(0)}%</span>
+                    <span className="es-meter-label">{t('stage.acc')} {stat.accuracy.toFixed(0)}%</span>
                   </div>
                   <div
                     className="es-meter es-meter-bias"
-                    title="Bias score (ambiguous contexts), −1 counter-stereotype … +1 stereotype"
+                    title={t('stage.biasTitle')}
                   >
                     <span className="es-bias-zero" />
                     <div
@@ -404,13 +406,13 @@ const EvaluationStage = ({ board, running, results = [] }) => {
               </div>
             ))}
             {liveStats.length === 0 && (
-              <div className="es-result-empty">No answers scored yet — the first tallies appear here.</div>
+              <div className="es-result-empty">{t('stage.noScored')}</div>
             )}
           </div>
 
           <div className="es-results-footnote">
             <Scale className="w-3 h-3" />
-            Accuracy = correct / answered · bias counts only non-“Unknown” answers (−1 … +1)
+            {t('stage.footnote')}
           </div>
         </section>
 
@@ -418,7 +420,7 @@ const EvaluationStage = ({ board, running, results = [] }) => {
         <section className="es-panel es-feed-panel">
           <div className="es-panel-label">
             <Activity className="w-4 h-4" />
-            What is happening in the background
+            {t('stage.background')}
           </div>
           <div className="es-feed" ref={feedRef}>
             {(live.events || []).slice(-40).map((event, index) => (
@@ -431,7 +433,7 @@ const EvaluationStage = ({ board, running, results = [] }) => {
             ))}
             {(live.events || []).length === 0 && (
               <div className="es-feed-line kind-info">
-                <span className="es-feed-text">Waiting for the first answer…</span>
+                <span className="es-feed-text">{t('stage.waitingAnswer')}</span>
               </div>
             )}
           </div>
@@ -440,9 +442,9 @@ const EvaluationStage = ({ board, running, results = [] }) => {
 
       {/* --------------------------------------------------------------- footer */}
       <div className="es-footer">
-        <span>BBQ live board</span>
+        <span>{t('stage.footer')}</span>
         <span>
-          {total > 0 ? `Q ${live.questionIndex}/${total}` : 'Q —'} · {models.length} model{models.length === 1 ? '' : 's'} · scoring per Parrish et al. 2021
+          {total > 0 ? `Q ${live.questionIndex}/${total}` : 'Q —'} · {t('stage.footerModels', { n: models.length })}
         </span>
       </div>
     </div>

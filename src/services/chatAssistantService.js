@@ -5,6 +5,7 @@
 
 import { TaskLabels } from '../data/bbqQuestions';
 import { calculateInsights, generateComparison } from './evaluationEngine';
+import { t, taskLabel } from './i18n';
 
 /**
  * Message types for chat
@@ -49,8 +50,8 @@ export const processUserQuery = (query) => {
   if (!evaluationContext.results || evaluationContext.results.length === 0) {
     return {
       type: MessageTypes.ASSISTANT,
-      content: "I don't have any evaluation results to analyze yet. Please run an evaluation first, and then I'll be able to answer your questions about the results.",
-      suggestions: ["How do I run an evaluation?", "What is BBQ benchmark?"]
+      content: t('chat.noResults'),
+      suggestions: [t('chat.suggest.runEval'), t('chat.suggest.whatIsBBQ')]
     };
   }
 
@@ -104,13 +105,13 @@ export const processUserQuery = (query) => {
   // Default response with helpful suggestions
   return {
     type: MessageTypes.ASSISTANT,
-    content: `I can help you understand your BBQ evaluation results. You have ${results.length} model(s) evaluated. What would you like to know?`,
+    content: t('chat.resultsCount', { n: results.length }),
     suggestions: [
-      "Which model performed best?",
-      "Show me bias analysis",
-      "What are the main concerns?",
-      "Give me recommendations",
-      "Compare all models"
+      t('chat.s.best'),
+      t('chat.s.bias'),
+      t('chat.s.concerns'),
+      t('chat.s.recs'),
+      t('chat.s.compare')
     ]
   };
 };
@@ -126,21 +127,21 @@ const handleBestModelQuery = (insights) => {
   let content = "";
   
   if (bestModel) {
-    content += `**Best Overall Performance:** ${bestModel.modelId} achieved the highest accuracy of **${bestModel.accuracy.toFixed(1)}%**.\n\n`;
+    content += t('chat.best.title', { model: bestModel.modelId, acc: bestModel.accuracy.toFixed(1) });
   }
   
   if (fastestModel && fastestModel.modelId !== bestModel?.modelId) {
-    content += `**Fastest Model:** ${fastestModel.modelId} with an average response time of **${(fastestModel.avgTime / 1000).toFixed(2)}s**.\n\n`;
+    content += t('chat.best.fastest', { model: fastestModel.modelId, t: (fastestModel.avgTime / 1000).toFixed(2) });
   }
   
   if (leastBiased && leastBiased.modelId !== bestModel?.modelId) {
-    content += `**Least Biased:** ${leastBiased.modelId} with a bias score of **${leastBiased.biasScore.toFixed(2)}** (${leastBiased.interpretation}).`;
+    content += t('chat.best.leastBiased', { model: leastBiased.modelId, score: leastBiased.biasScore.toFixed(2), interp: leastBiased.interpretation });
   }
   
   return {
     type: MessageTypes.ASSISTANT,
-    content: content || "I couldn't determine the best model from the current results.",
-    suggestions: ["What about the worst model?", "Show bias analysis", "Give me recommendations"]
+    content: content || t('chat.best.none'),
+    suggestions: [t('chat.s.worst'), t('chat.s.bias'), t('chat.s.recs')]
   };
 };
 
@@ -155,17 +156,17 @@ const handleWorstModelQuery = (insights, results) => {
   let content = "";
   
   if (worstModel) {
-    content += `**Lowest Accuracy:** ${worstModel.modelId} achieved **${(worstModel.accuracy?.overall || 0).toFixed(1)}%** accuracy.\n\n`;
+    content += t('chat.worst.title', { model: worstModel.modelId, acc: (worstModel.accuracy?.overall || 0).toFixed(1) });
   }
   
   if (mostBiased) {
-    content += `**Highest Bias:** ${mostBiased.modelId} shows **${mostBiased.interpretation}** with a score of **${mostBiased.biasScore.toFixed(2)}**.`;
+    content += t('chat.worst.biased', { model: mostBiased.modelId, interp: mostBiased.interpretation, score: mostBiased.biasScore.toFixed(2) });
   }
   
   return {
     type: MessageTypes.ASSISTANT,
-    content: content || "I couldn't determine the worst performing model from the current results.",
-    suggestions: ["Which model is best?", "How can I improve results?", "Show risk analysis"]
+    content: content || t('chat.worst.none'),
+    suggestions: [t('chat.s.best'), t('chat.s.improve'), t('chat.s.risk')]
   };
 };
 
@@ -175,18 +176,18 @@ const handleWorstModelQuery = (insights, results) => {
 const handleBiasQuery = (insights) => {
   const { biasRange, leastBiased, mostBiased } = insights || {};
   
-  let content = "## Bias Analysis\n\n";
+  let content = t('chat.bias.header');
   
   if (biasRange) {
-    content += `**Bias Score Range:** ${biasRange.min.toFixed(2)} to ${biasRange.max.toFixed(2)} (spread: ${biasRange.spread.toFixed(2)})\n\n`;
+    content += t('chat.bias.range', { min: biasRange.min.toFixed(2), max: biasRange.max.toFixed(2), spread: biasRange.spread.toFixed(2) });
   }
   
   if (leastBiased) {
-    content += `✅ **Least Biased:** ${leastBiased.modelId} (${leastBiased.biasScore.toFixed(2)} - ${leastBiased.interpretation})\n`;
+    content += t('chat.bias.least', { model: leastBiased.modelId, score: leastBiased.biasScore.toFixed(2), interp: leastBiased.interpretation });
   }
   
   if (mostBiased) {
-    content += `⚠️ **Most Biased:** ${mostBiased.modelId} (${mostBiased.biasScore.toFixed(2)} - ${mostBiased.interpretation})\n\n`;
+    content += t('chat.bias.most', { model: mostBiased.modelId, score: mostBiased.biasScore.toFixed(2), interp: mostBiased.interpretation });
   }
   
   // Add task-level bias insights
@@ -194,17 +195,17 @@ const handleBiasQuery = (insights) => {
   const biasedTasks = taskInsights.filter(t => Math.abs(t.averageBias) > 0.2);
   
   if (biasedTasks.length > 0) {
-    content += "**Tasks with Notable Bias:**\n";
+    content += t('chat.bias.tasks');
     biasedTasks.slice(0, 5).forEach(task => {
-      const direction = task.averageBias > 0 ? "pro-stereotype" : "counter-stereotype";
-      content += `- ${task.task}: ${task.averageBias.toFixed(2)} (${direction})\n`;
+      const direction = task.averageBias > 0 ? t('chat.bias.pro') : t('chat.bias.counter');
+      content += `- ${taskLabel(task.task)}: ${task.averageBias.toFixed(2)} (${direction})\n`;
     });
   }
   
   return {
     type: MessageTypes.ASSISTANT,
-    content: content || "No significant bias data available.",
-    suggestions: ["What does bias score mean?", "How to reduce bias?", "Show accuracy analysis"]
+    content: content || t('chat.bias.none'),
+    suggestions: [t('chat.s.biasDef'), t('chat.s.reduceBias'), t('chat.s.accspeed')]
   };
 };
 
@@ -214,15 +215,15 @@ const handleBiasQuery = (insights) => {
 const handleAccuracyQuery = (insights) => {
   const { accuracyRange, mostAccurate, taskInsights } = insights || {};
   
-  let content = "## Accuracy Analysis\n\n";
+  let content = t('chat.acc.header');
   
   if (accuracyRange) {
-    content += `**Accuracy Range:** ${accuracyRange.min.toFixed(1)}% to ${accuracyRange.max.toFixed(1)}%\n`;
-    content += `**Spread:** ${accuracyRange.spread.toFixed(1)} percentage points\n\n`;
+    content += t('chat.acc.range', { min: accuracyRange.min.toFixed(1), max: accuracyRange.max.toFixed(1) });
+    content += t('chat.acc.spread', { n: accuracyRange.spread.toFixed(1) });
   }
   
   if (mostAccurate) {
-    content += `🏆 **Highest Accuracy:** ${mostAccurate.modelId} with **${mostAccurate.accuracy.toFixed(1)}%**\n\n`;
+    content += t('chat.acc.highest', { model: mostAccurate.modelId, acc: mostAccurate.accuracy.toFixed(1) });
   }
   
   // Task difficulty analysis
@@ -231,25 +232,25 @@ const handleAccuracyQuery = (insights) => {
     const easyTasks = taskInsights.filter(t => t.difficulty === 'Easy');
     
     if (hardTasks.length > 0) {
-      content += "**Most Challenging Tasks:**\n";
+      content += t('chat.acc.hardTasks');
       hardTasks.slice(0, 3).forEach(task => {
-        content += `- ${task.task}: ${task.averageAccuracy.toFixed(1)}% avg accuracy\n`;
+        content += t('chat.acc.taskLine', { task: taskLabel(task.task), acc: task.averageAccuracy.toFixed(1) });
       });
       content += "\n";
     }
     
     if (easyTasks.length > 0) {
-      content += "**Easiest Tasks:**\n";
+      content += t('chat.acc.easyTasks');
       easyTasks.slice(0, 3).forEach(task => {
-        content += `- ${task.task}: ${task.averageAccuracy.toFixed(1)}% avg accuracy\n`;
+        content += t('chat.acc.taskLine', { task: taskLabel(task.task), acc: task.averageAccuracy.toFixed(1) });
       });
     }
   }
   
   return {
     type: MessageTypes.ASSISTANT,
-    content: content || "No accuracy data available.",
-    suggestions: ["Why is accuracy low?", "Compare models", "Show task breakdown"]
+    content: content || t('chat.acc.none'),
+    suggestions: [t('chat.s.weak'), t('chat.s.compare'), t('chat.s.breakdown')]
   };
 };
 
@@ -265,21 +266,21 @@ const handleSpeedQuery = (insights, results) => {
     ? responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length 
     : 0;
   
-  let content = "## Response Time Analysis\n\n";
+  let content = t('chat.speed.header');
   
   if (fastestModel) {
-    content += `⚡ **Fastest Model:** ${fastestModel.modelId}\n`;
-    content += `**Average Latency:** ${(fastestModel.avgTime / 1000).toFixed(2)}s\n\n`;
+    content += t('chat.speed.fastest', { model: fastestModel.modelId });
+    content += t('chat.speed.avg', { t: (fastestModel.avgTime / 1000).toFixed(2) });
   }
   
-  content += `**Overall Average:** ${(avgTime / 1000).toFixed(2)}s across all models\n\n`;
+  content += t('chat.speed.overall', { t: (avgTime / 1000).toFixed(2) });
   
   // Sort by speed
   const sortedBySpeed = [...results].sort((a, b) => 
     (a.averageResponseTime || Infinity) - (b.averageResponseTime || Infinity)
   );
   
-  content += "**Speed Ranking:**\n";
+  content += t('chat.speed.ranking');
   sortedBySpeed.slice(0, 5).forEach((model, idx) => {
     const time = (model.averageResponseTime || 0) / 1000;
     content += `${idx + 1}. ${model.modelId}: ${time.toFixed(2)}s\n`;
@@ -288,7 +289,7 @@ const handleSpeedQuery = (insights, results) => {
   return {
     type: MessageTypes.ASSISTANT,
     content: content,
-    suggestions: ["Is speed important?", "Accuracy vs speed trade-off", "Show all metrics"]
+    suggestions: [t('chat.s.speed'), t('chat.s.accspeed'), t('chat.s.allMetrics')]
   };
 };
 
@@ -300,40 +301,40 @@ const handleTaskQuery = (insights, results, query) => {
   
   // Try to find a specific task mentioned
   const taskNames = Object.values(TaskLabels);
-  const mentionedTask = taskNames.find(task => query.includes(task.toLowerCase()));
+  const mentionedTask = taskNames.find(task => query.toLowerCase().includes(task.toLowerCase())
+    || query.toLowerCase().includes(taskLabel(task).toLowerCase()));
   
   if (mentionedTask) {
     const taskData = taskInsights.find(t => t.task === mentionedTask);
     if (taskData) {
       return {
         type: MessageTypes.ASSISTANT,
-        content: `## ${mentionedTask} Analysis\n\n` +
-          `**Average Accuracy:** ${taskData.averageAccuracy.toFixed(1)}%\n` +
-          `**Difficulty:** ${taskData.difficulty}\n` +
-          `**Average Bias:** ${taskData.averageBias.toFixed(2)} (${taskData.biasInterpretation})\n\n` +
-          `**Best Model:** ${taskData.bestModel} (${taskData.bestAccuracy.toFixed(1)}%)\n` +
-          `**Needs Improvement:** ${taskData.worstModel} (${taskData.worstAccuracy.toFixed(1)}%)`,
-        suggestions: ["Show all tasks", "Which task is hardest?", "Give recommendations"]
+        content: t('chat.task.analysis', { task: mentionedTask }) +
+          t('chat.task.avgAcc', { v: taskData.averageAccuracy.toFixed(1) }) +
+          t('chat.task.difficulty', { v: taskData.difficulty }) +
+          t('chat.task.avgBias', { v: taskData.averageBias.toFixed(2), interp: taskData.biasInterpretation }) +
+          t('chat.task.bestModel', { model: taskData.bestModel, acc: taskData.bestAccuracy.toFixed(1) }) +
+          t('chat.task.weakModel', { model: taskData.worstModel, acc: taskData.worstAccuracy.toFixed(1) }),
+        suggestions: [t('chat.s.tasks'), t('chat.s.hardestTask'), t('chat.s.recs')]
       };
     }
   }
   
   // Show all tasks summary
-  let content = "## Task Performance Summary\n\n";
+  let content = t('chat.task.summaryHeader');
   
   const sortedByDifficulty = [...taskInsights].sort((a, b) => a.averageAccuracy - b.averageAccuracy);
   
-  content += "| Task | Avg Accuracy | Difficulty | Avg Bias |\n";
-  content += "|------|-------------|------------|----------|\n";
+  content += t('chat.task.tableHeader');
   
   sortedByDifficulty.forEach(task => {
-    content += `| ${task.task} | ${task.averageAccuracy.toFixed(1)}% | ${task.difficulty} | ${task.averageBias.toFixed(2)} |\n`;
+    content += `| ${taskLabel(task.task)} | ${task.averageAccuracy.toFixed(1)}% | ${t(`difficulty.${task.difficulty}`)} | ${task.averageBias.toFixed(2)} |\n`;
   });
   
   return {
     type: MessageTypes.ASSISTANT,
     content: content,
-    suggestions: ["Which task has most bias?", "Hardest task analysis", "How to improve?"]
+    suggestions: [t('chat.s.mostBias'), t('chat.s.hardAnalysis'), t('chat.s.howImprove')]
   };
 };
 
@@ -344,8 +345,8 @@ const handleComparisonQuery = (comparison, results) => {
   if (!comparison || results.length < 2) {
     return {
       type: MessageTypes.ASSISTANT,
-      content: "I need at least 2 models to provide a comparison. Please evaluate multiple models to see comparative analysis.",
-      suggestions: ["How to add more models?", "Show single model analysis", "What metrics matter?"]
+      content: t('chat.comp.needTwo'),
+      suggestions: [t('chat.s.addModels'), t('chat.s.single'), t('chat.s.metrics')]
     };
   }
   
@@ -357,11 +358,11 @@ const handleComparisonQuery = (comparison, results) => {
   const worst = sortedByAccuracy[sortedByAccuracy.length - 1];
   const accuracyDiff = (best.accuracy?.overall || 0) - (worst.accuracy?.overall || 0);
   
-  let content = "## Model Comparison\n\n";
+  let content = t('chat.comp.header');
   
-  content += `**Accuracy Gap:** ${accuracyDiff.toFixed(1)} percentage points between best and worst\n\n`;
+  content += t('chat.comp.gap', { n: accuracyDiff.toFixed(1) });
   
-  content += "**Performance Ranking:**\n";
+  content += t('chat.comp.ranking');
   sortedByAccuracy.forEach((model, idx) => {
     const acc = model.accuracy?.overall || 0;
     const bias = model.overallBiasScore || 0;
@@ -374,7 +375,7 @@ const handleComparisonQuery = (comparison, results) => {
   return {
     type: MessageTypes.ASSISTANT,
     content: content,
-    suggestions: ["Which model should I choose?", "Accuracy vs bias trade-off", "Show detailed breakdown"]
+    suggestions: [t('chat.s.choose'), t('chat.s.tradeoff'), t('chat.s.breakdown')]
   };
 };
 
@@ -384,31 +385,31 @@ const handleComparisonQuery = (comparison, results) => {
 const handleRecommendationQuery = (insights) => {
   const { mostAccurate, leastBiased, fastestModel, taskInsights } = insights || {};
   
-  let content = "## 🤖 Assistant Recommendations\n\n";
+  let content = t('chat.rec.header');
   
   // Primary recommendation
-  content += "### Primary Recommendation\n";
+  content += t('chat.rec.primary');
   if (mostAccurate && leastBiased) {
     if (mostAccurate.modelId === leastBiased.modelId) {
-      content += `**${mostAccurate.modelId}** is your best choice - it has both the highest accuracy (${mostAccurate.accuracy.toFixed(1)}%) and lowest bias (${leastBiased.biasScore.toFixed(2)}).\n\n`;
+      content += t('chat.rec.bestChoice', { model: mostAccurate.modelId, acc: mostAccurate.accuracy.toFixed(1), bias: leastBiased.biasScore.toFixed(2) });
     } else {
-      content += `For **accuracy**, choose **${mostAccurate.modelId}** (${mostAccurate.accuracy.toFixed(1)}%).\n`;
-      content += `For **fairness**, choose **${leastBiased.modelId}** (${leastBiased.biasScore.toFixed(2)} bias score).\n\n`;
+      content += t('chat.rec.forAccuracy', { model: mostAccurate.modelId, acc: mostAccurate.accuracy.toFixed(1) });
+      content += t('chat.rec.forFairness', { model: leastBiased.modelId, bias: leastBiased.biasScore.toFixed(2) });
     }
   }
   
   // Speed consideration
   if (fastestModel) {
-    content += `For **speed**, **${fastestModel.modelId}** is fastest at ${(fastestModel.avgTime / 1000).toFixed(2)}s average response time.\n\n`;
+    content += t('chat.rec.forSpeed', { model: fastestModel.modelId, t: (fastestModel.avgTime / 1000).toFixed(2) });
   }
   
   // Areas for improvement
   const hardTasks = taskInsights?.filter(t => t.difficulty === 'Hard') || [];
   if (hardTasks.length > 0) {
-    content += "### Areas Needing Attention\n";
-    content += "Focus on improving performance in these challenging categories:\n";
+    content += t('chat.rec.attention');
+    content += t('chat.rec.focus');
     hardTasks.slice(0, 3).forEach(task => {
-      content += `- **${task.task}**: Only ${task.averageAccuracy.toFixed(1)}% average accuracy\n`;
+      content += t('chat.rec.taskAcc', { task: taskLabel(task.task), acc: task.averageAccuracy.toFixed(1) });
     });
     content += "\n";
   }
@@ -416,17 +417,17 @@ const handleRecommendationQuery = (insights) => {
   // Bias concerns
   const biasedTasks = taskInsights?.filter(t => Math.abs(t.averageBias) > 0.3) || [];
   if (biasedTasks.length > 0) {
-    content += "### Bias Concerns\n";
-    content += "These categories show significant bias and need attention:\n";
+    content += t('chat.rec.biasConcerns');
+    content += t('chat.rec.biasIntro');
     biasedTasks.forEach(task => {
-      content += `- **${task.task}**: ${task.averageBias.toFixed(2)} (${task.biasInterpretation})\n`;
+      content += t('chat.rec.biasTask', { task: taskLabel(task.task), bias: task.averageBias.toFixed(2), interp: task.biasInterpretation });
     });
   }
   
   return {
     type: MessageTypes.ASSISTANT,
     content: content,
-    suggestions: ["How to reduce bias?", "How to improve accuracy?", "What do these scores mean?"]
+    suggestions: [t('chat.s.reduceBias'), t('chat.s.improveAcc'), t('chat.s.meaning')]
   };
 };
 
@@ -434,30 +435,30 @@ const handleRecommendationQuery = (insights) => {
  * Handle improvement queries
  */
 const handleImprovementQuery = () => {
-  let content = "## 📈 Improvement Suggestions\n\n";
+  let content = t('chat.improve.header');
   
-  content += "### To Improve Accuracy:\n";
-  content += "1. **Increase sample size** - Run more questions for statistical significance\n";
-  content += "2. **Review failed questions** - Analyze patterns in incorrect answers\n";
-  content += "3. **Adjust temperature** - Lower temperature (0.0-0.3) for more deterministic responses\n";
-  content += "4. **Check context handling** - Ensure models properly use provided context\n\n";
+  content += t('chat.improve.accTitle');
+  content += t('chat.improve.acc1');
+  content += t('chat.improve.acc2');
+  content += t('chat.improve.acc3');
+  content += t('chat.improve.acc4');
   
-  content += "### To Reduce Bias:\n";
-  content += "1. **Use disambiguated contexts** - Models perform more fairly with complete information\n";
-  content += "2. **Fine-tune on balanced data** - Train with diverse, representative examples\n";
-  content += "3. **Add bias mitigation prompts** - Include fairness instructions in prompts\n";
-  content += "4. **Monitor regularly** - Run evaluations periodically to catch drift\n\n";
+  content += t('chat.improve.biasTitle');
+  content += t('chat.improve.bias1');
+  content += t('chat.improve.bias2');
+  content += t('chat.improve.bias3');
+  content += t('chat.improve.bias4');
   
-  content += "### To Improve Speed:\n";
-  content += "1. **Reduce context length** - Shorter prompts process faster\n";
-  content += "2. **Use smaller models** - Trade some accuracy for speed\n";
-  content += "3. **Enable caching** - Reuse responses for similar queries\n";
-  content += "4. **Adjust concurrency** - Process multiple questions in parallel\n";
+  content += t('chat.improve.speedTitle');
+  content += t('chat.improve.speed1');
+  content += t('chat.improve.speed2');
+  content += t('chat.improve.speed3');
+  content += t('chat.improve.speed4');
   
   return {
     type: MessageTypes.ASSISTANT,
     content: content,
-    suggestions: ["Show current weaknesses", "What is bias score?", "Give me a summary"]
+    suggestions: [t('chat.s.weak'), t('chat.s.biasDef'), t('chat.s.summary')]
   };
 };
 
@@ -467,34 +468,34 @@ const handleImprovementQuery = () => {
 const handleSummaryQuery = (insights, results) => {
   const { mostAccurate, leastBiased, fastestModel, accuracyRange, taskInsights } = insights || {};
   
-  let content = "## 📊 Evaluation Summary\n\n";
+  let content = t('chat.summary.header');
   
-  content += `**Models Evaluated:** ${results.length}\n`;
-  content += `**Questions per Model:** ${results[0]?.totalQuestions || 'N/A'}\n`;
-  content += `**Accuracy Range:** ${accuracyRange?.min.toFixed(1) || 0}% - ${accuracyRange?.max.toFixed(1) || 0}%\n\n`;
+  content += t('chat.summary.models', { n: results.length });
+  content += t('chat.summary.questionsPer', { n: results[0]?.totalQuestions || t('chart.na') });
+  content += t('chat.summary.accRange', { a: accuracyRange?.min.toFixed(1) || 0, b: accuracyRange?.max.toFixed(1) || 0 });
   
-  content += "### Top Performers:\n";
+  content += t('chat.summary.top');
   if (mostAccurate) {
-    content += `🏆 **Most Accurate:** ${mostAccurate.modelId} (${mostAccurate.accuracy.toFixed(1)}%)\n`;
+    content += t('chat.summary.mostAcc', { model: mostAccurate.modelId, acc: mostAccurate.accuracy.toFixed(1) });
   }
   if (fastestModel) {
-    content += `⚡ **Fastest:** ${fastestModel.modelId} (${(fastestModel.avgTime / 1000).toFixed(2)}s)\n`;
+    content += t('chat.summary.fastest', { model: fastestModel.modelId, t: (fastestModel.avgTime / 1000).toFixed(2) });
   }
   if (leastBiased) {
-    content += `✅ **Least Biased:** ${leastBiased.modelId} (${leastBiased.biasScore.toFixed(2)})\n`;
+    content += t('chat.summary.leastBiased', { model: leastBiased.modelId, bias: leastBiased.biasScore.toFixed(2) });
   }
   
-  content += "\n### Task Performance:\n";
+  content += t('chat.summary.taskPerf');
   const sortedTasks = [...(taskInsights || [])].sort((a, b) => a.averageAccuracy - b.averageAccuracy);
   sortedTasks.slice(0, 5).forEach(task => {
     const emoji = task.difficulty === 'Hard' ? '🔴' : task.difficulty === 'Medium' ? '🟡' : '🟢';
-    content += `${emoji} ${task.task}: ${task.averageAccuracy.toFixed(1)}%\n`;
+    content += `${emoji} ${taskLabel(task.task)}: ${task.averageAccuracy.toFixed(1)}%\n`;
   });
   
   return {
     type: MessageTypes.ASSISTANT,
     content: content,
-    suggestions: ["Show detailed analysis", "What are the risks?", "Give recommendations"]
+    suggestions: [t('chat.s.detailed'), t('chat.s.risks'), t('chat.s.recs')]
   };
 };
 
@@ -502,13 +503,13 @@ const handleSummaryQuery = (insights, results) => {
  * Handle risk/concern queries
  */
 const handleRiskQuery = (insights, results) => {
-  let content = "## ⚠️ Risk Analysis\n\n";
+  let content = t('chat.risk.header');
   
   // High bias models
   const highBiasModels = results.filter(r => Math.abs(r.overallBiasScore || 0) >= 0.5);
   if (highBiasModels.length > 0) {
-    content += "### High Bias Risk (|s_amb| ≥ 0.5)\n";
-    content += "These models show significant bias and may produce unfair results:\n";
+    content += t('chat.risk.highBias');
+    content += t('chat.risk.highBiasIntro');
     highBiasModels.forEach(model => {
       content += `- **${model.modelId}**: ${(model.overallBiasScore || 0).toFixed(2)}\n`;
     });
@@ -518,8 +519,8 @@ const handleRiskQuery = (insights, results) => {
   // Low accuracy models
   const lowAccuracyModels = results.filter(r => (r.accuracy?.overall || 0) < 50);
   if (lowAccuracyModels.length > 0) {
-    content += "### Low Accuracy Risk (< 50%)\n";
-    content += "These models struggle with the benchmark questions:\n";
+    content += t('chat.risk.lowAcc');
+    content += t('chat.risk.lowAccIntro');
     lowAccuracyModels.forEach(model => {
       content += `- **${model.modelId}**: ${(model.accuracy?.overall || 0).toFixed(1)}%\n`;
     });
@@ -529,8 +530,8 @@ const handleRiskQuery = (insights, results) => {
   // Slow models
   const slowModels = results.filter(r => (r.averageResponseTime || 0) > 5000);
   if (slowModels.length > 0) {
-    content += "### High Latency Risk (> 5s)\n";
-    content += "These models may not be suitable for real-time applications:\n";
+    content += t('chat.risk.slow');
+    content += t('chat.risk.slowIntro');
     slowModels.forEach(model => {
       content += `- **${model.modelId}**: ${((model.averageResponseTime || 0) / 1000).toFixed(2)}s\n`;
     });
@@ -541,21 +542,20 @@ const handleRiskQuery = (insights, results) => {
   const { taskInsights } = insights || {};
   const riskyTasks = taskInsights?.filter(t => t.averageAccuracy < 50 || Math.abs(t.averageBias) > 0.4) || [];
   if (riskyTasks.length > 0) {
-    content += "### Task-Specific Concerns\n";
+    content += t('chat.risk.taskConcerns');
     riskyTasks.forEach(task => {
-      content += `- **${task.task}**: ${task.averageAccuracy.toFixed(1)}% accuracy, ${task.averageBias.toFixed(2)} bias\n`;
+      content += t('chat.risk.taskLine', { task: taskLabel(task.task), acc: task.averageAccuracy.toFixed(1), bias: task.averageBias.toFixed(2) });
     });
   }
   
   if (highBiasModels.length === 0 && lowAccuracyModels.length === 0 && slowModels.length === 0 && riskyTasks.length === 0) {
-    content += "✅ **No major risks detected!** All models are performing within acceptable parameters.\n\n";
-    content += "Continue monitoring with regular evaluations to catch any drift over time.";
+    content += t('chat.risk.none');
   }
   
   return {
     type: MessageTypes.ASSISTANT,
     content: content,
-    suggestions: ["How to mitigate risks?", "Show recommendations", "Compare models"]
+    suggestions: [t('chat.s.mitigate'), t('chat.s.recs'), t('chat.s.compare')]
   };
 };
 
@@ -564,14 +564,14 @@ const handleRiskQuery = (insights, results) => {
  */
 export const getSuggestedQuestions = () => {
   return [
-    "Which model performed best?",
-    "Show me bias analysis",
-    "What are the main concerns?",
-    "Give me recommendations",
-    "Compare all models",
-    "Which tasks are hardest?",
-    "How can I improve results?",
-    "Show me a summary"
+    t('chat.s.best'),
+    t('chat.s.bias'),
+    t('chat.s.concerns'),
+    t('chat.s.recs'),
+    t('chat.s.compare'),
+    t('chat.s.hardest'),
+    t('chat.s.improve'),
+    t('chat.s.summary')
   ];
 };
 

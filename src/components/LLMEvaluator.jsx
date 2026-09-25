@@ -29,8 +29,10 @@ import {
   Timer,
   ClipboardCheck,
   Bell,
-  Globe
+  Globe,
+  Lock
 } from 'lucide-react';
+import { t, useLang } from '../services/i18n';
 import { TaskLabels } from '../data/bbqQuestions';
 import { loadBBQData, getCacheStatus, clearBBQCache, loadBBQMetadata, getMetadataStatus } from '../data/bbqDataLoader';
 import { generateCompletion as ollamaGenerateCompletion, buildPrompt, buildTrickyPrompt, extractAnswer } from '../services/ollamaService';
@@ -74,6 +76,7 @@ import './EvaluationCharts.css';
 import './InteractionLogSidebar.css';
 
 const LLMEvaluator = ({ onResultsChange, onProviderSettingsChange }) => {
+  useLang(); // re-render on language switch
   // State
   const [availableModels, setAvailableModels] = useState([]);
   const [selectedModels, setSelectedModels] = useState([]);
@@ -140,9 +143,22 @@ const LLMEvaluator = ({ onResultsChange, onProviderSettingsChange }) => {
   const runPlanRef = useRef(null);
   // Mirrored into state purely so the plan is persisted with the run and survives a reload.
   const [runPlan, setRunPlan] = useState(null);
+  // The exact models a run was started with. The selection is frozen once a run begins
+  // (and stays frozen while paused/stopped) so Resume always scores the same models —
+  // changing the roster mid-run would corrupt the per-model tallies. Held in a ref so the
+  // run loop reads it synchronously, and persisted with the run so a reload keeps it.
+  const runModelsRef = useRef(null);
+  const [runModels, setRunModels] = useState(null);
   // True while the stop handler is waiting for the aborted run loop to unwind. The UI
   // uses it to disable Resume so a second loop cannot be started concurrently.
   const [isStopping, setIsStopping] = useState(false);
+
+  // The model roster is locked from the moment a run starts until it is fully reset.
+  // While running, stopping or paused, the selection must not change: the results and
+  // the live board are keyed by model index, so a roster change would corrupt them.
+  // The lock also stays on after a run finishes (results exist) so a follow-up run cannot
+  // silently switch models — only Reset clears the results and releases the lock.
+  const selectionLocked = isRunning || isStopping || isStopped || results.length > 0;
 
   useEffect(() => {
     if (onResultsChange) {
@@ -269,6 +285,9 @@ const LLMEvaluator = ({ onResultsChange, onProviderSettingsChange }) => {
     // The deterministic question plan, so Resume continues the exact same questions
     // after a page reload instead of a freshly reshuffled sample.
     RUN_PLAN: 'kmail-bbq-run-plan',
+    // The frozen model roster for the active run, so a reload during a paused run keeps
+    // scoring exactly the same models.
+    RUN_MODELS: 'kmail-bbq-run-models',
   };
 
   // Track if state was restored from persistence
@@ -286,6 +305,18 @@ const LLMEvaluator = ({ onResultsChange, onProviderSettingsChange }) => {
           runPlanRef.current = plan;
           setRunPlan(plan);
           console.log('[Persistence] Restored run plan with', Object.keys(plan.ids).length, 'categories');
+        }
+      }
+
+      // Restore the frozen model roster alongside the plan. A stopped run could not be
+      // resumed faithfully if the roster were lost, so both are read before anything else.
+      const savedRunModels = localStorage.getItem(STORAGE_KEYS.RUN_MODELS);
+      if (savedRunModels) {
+        const models = JSON.parse(savedRunModels);
+        if (Array.isArray(models) && models.length > 0) {
+          runModelsRef.current = models;
+          setRunModels(models);
+          console.log('[Persistence] Restored frozen model roster with', models.length, 'models');
         }
       }
 
@@ -332,6 +363,13 @@ const LLMEvaluator = ({ onResultsChange, onProviderSettingsChange }) => {
       const savedModels = localStorage.getItem(STORAGE_KEYS.SELECTED_MODELS);
       if (savedModels) {
         setSelectedModels(JSON.parse(savedModels));
+      }
+
+      // If a run is paused, the frozen roster is authoritative: show exactly the models
+      // that run is scoring, even if the editable selection was changed later. This keeps
+      // the visible checkboxes consistent with the results and the resume plan.
+      if (runModelsRef.current?.length) {
+        setSelectedModels(runModelsRef.current);
       }
 
       // Load selected categories
@@ -382,6 +420,17 @@ const LLMEvaluator = ({ onResultsChange, onProviderSettingsChange }) => {
     }
   }, [runPlan]);
 
+  // Persist the frozen model roster alongside the run, so a reload during a paused run
+  // keeps scoring exactly the models the run started with.
+  useEffect(() => {
+    if (!runModels || runModels.length === 0) return;
+    try {
+      localStorage.setItem(STORAGE_KEYS.RUN_MODELS, JSON.stringify(runModels));
+    } catch (error) {
+      console.warn('[Persistence] Could not save the frozen model roster:', error);
+    }
+  }, [runModels]);
+
   // Persist results
   useEffect(() => {
     if (results.length > 0) {
@@ -429,6 +478,9 @@ const LLMEvaluator = ({ onResultsChange, onProviderSettingsChange }) => {
   };
 
   const toggleModelSelection = (modelId) => {
+    // The roster is frozen for the whole lifetime of a run (running, stopping or paused).
+    // Changing it mid-run would desynchronise the per-model result accumulators.
+    if (selectionLocked) return;
     setSelectedModels(prev => {
       const exists = prev.some(m => (typeof m === 'object' ? m.id : m) === modelId);
       if (exists) {
@@ -440,6 +492,7 @@ const LLMEvaluator = ({ onResultsChange, onProviderSettingsChange }) => {
   };
 
   const selectAllModels = () => {
+    if (selectionLocked) return;
     if (selectedModels.length === availableModels.length) {
       setSelectedModels([]);
     } else {
@@ -473,7 +526,7 @@ const LLMEvaluator = ({ onResultsChange, onProviderSettingsChange }) => {
       setCacheStatus(status);
     } catch (error) {
       console.error('Failed to load GitHub data:', error);
-      alert('Failed to load data: ' + error.message);
+      alert(t('eval.loadFailed', { e: error.message }));
     } finally {
       clearInterval(ticker);
       setIsLoadingData(false);
@@ -482,7 +535,7 @@ const LLMEvaluator = ({ onResultsChange, onProviderSettingsChange }) => {
   };
 
   const handleClearCache = async () => {
-    if (window.confirm('Clear all cached BBQ data? You will need to reload from GitHub.')) {
+    if (window.confirm(t('eval.clearCacheConfirm'))) {
       await clearBBQCache();
       setLoadedQuestions([]);
       setCacheStatus(null);
@@ -503,9 +556,9 @@ const LLMEvaluator = ({ onResultsChange, onProviderSettingsChange }) => {
 
   /** Describe one option's role for the stage's "why this counts" labels. */
   const optionRoles = (question) => ({
-    [question.unknownOption]: { key: 'unknown', label: 'Unknown — correct in ambiguous contexts' },
-    [question.stereotypedOption]: { key: 'target', label: 'Stereotype target — picking it raises the bias score' },
-    [question.nonStereotypedOption]: { key: 'nonTarget', label: 'Non-target — picking it lowers the bias score' },
+    [question.unknownOption]: { key: 'unknown', labelKey: 'stage.role.unknown' },
+    [question.stereotypedOption]: { key: 'target', labelKey: 'stage.role.target' },
+    [question.nonStereotypedOption]: { key: 'nonTarget', labelKey: 'stage.role.nonTarget' },
   });
 
   const providerLabelFor = (modelEntry) => {
@@ -548,8 +601,8 @@ const LLMEvaluator = ({ onResultsChange, onProviderSettingsChange }) => {
     }, 80);
   };
 
-  /** Start a fresh board for a question, with one lane per selected model. */
-  const startBoardForQuestion = (question, questionIndex, total) => {
+  /** Start a fresh board for a question, with one lane per model in the frozen roster. */
+  const startBoardForQuestion = (question, questionIndex, total, roster = runModelsRef.current || selectedModels) => {
     const board = {
       questionIndex,
       total,
@@ -562,7 +615,7 @@ const LLMEvaluator = ({ onResultsChange, onProviderSettingsChange }) => {
       options: question.options || [],
       roles: optionRoles(question),
       startedAt: Date.now(),
-      models: buildModelLanes(selectedModels),
+      models: buildModelLanes(roster),
       events: [],
     };
     liveBoardRef.current = board;
@@ -605,9 +658,9 @@ const LLMEvaluator = ({ onResultsChange, onProviderSettingsChange }) => {
   }, []);
 
   // Evaluate a single question across all models concurrently
-  const evaluateQuestionForAllModels = async (question, questionIndex, totalQuestions, existingResults) => {
+  const evaluateQuestionForAllModels = async (question, questionIndex, totalQuestions, existingResults, roster = runModelsRef.current || selectedModels) => {
     // Create promises for all models to answer this question
-    const modelPromises = selectedModels.map(async (modelEntry, modelIndex) => {
+    const modelPromises = roster.map(async (modelEntry, modelIndex) => {
       // Handle both model objects (new) and string IDs (legacy)
       const modelId = typeof modelEntry === 'object' ? modelEntry.id : modelEntry;
       const providerId = typeof modelEntry === 'object' ? modelEntry.providerId : null;
@@ -884,13 +937,13 @@ No explanation, no thinking, just the letter.`;
   };
 
   const runEvaluation = async (resume = false, startIndex = null) => {
-    if (selectedModels.length === 0) {
-      alert('Please select at least one model to evaluate');
+    if (selectedModels.length === 0 && !runModelsRef.current?.length) {
+      alert(t('eval.selectModelFirst'));
       return;
     }
 
     if (loadedQuestions.length === 0) {
-      alert('Please load BBQ data from GitHub first');
+      alert(t('eval.loadDataFirst'));
       return;
     }
 
@@ -899,7 +952,7 @@ No explanation, no thinking, just the letter.`;
     if (loadedQuestions.length > 0) {
       allQuestions = loadedQuestions;
     } else {
-      alert('Please load BBQ data from GitHub first');
+      alert(t('eval.loadDataFirst'));
       return;
     }
 
@@ -908,7 +961,7 @@ No explanation, no thinking, just the letter.`;
     allQuestions = allQuestions.filter(q => categoriesToUse.includes(q.source));
 
     if (allQuestions.length === 0) {
-      alert('Please select at least one category');
+      alert(t('eval.selectCategory'));
       return;
     }
 
@@ -958,6 +1011,16 @@ No explanation, no thinking, just the letter.`;
       console.warn(`[Plan] ${missingFromPlan} planned question(s) are no longer in the data and were skipped.`);
     }
 
+    // Freeze the model roster for the whole run. A resume reuses the roster the run was
+    // started with; a fresh run snapshots the current selection. Everything below reads
+    // from `roster`, never from the live `selectedModels`, so the selection cannot drift
+    // mid-run even if the UI were to change.
+    const roster = resume && runModelsRef.current?.length
+      ? runModelsRef.current
+      : selectedModels;
+    runModelsRef.current = roster;
+    setRunModels(roster);
+
     // Reset for fresh start
     if (!resume) {
       setIsRunning(true);
@@ -966,7 +1029,7 @@ No explanation, no thinking, just the letter.`;
       setResults([]);
       setInteractions([]);
       clearLiveBoard();
-      setProgress({ current: 0, total: limitedQuestions.length, model: '', modelIndex: 0, totalModels: selectedModels.length });
+      setProgress({ current: 0, total: limitedQuestions.length, model: '', modelIndex: 0, totalModels: roster.length });
       stopRef.current = false;
     } else {
       // When resuming, make sure we're still running
@@ -1013,17 +1076,17 @@ No explanation, no thinking, just the letter.`;
           current: qIdx + 1,
           total: limitedQuestions.length,
           model: `Question ${qIdx + 1}/${limitedQuestions.length}`,
-          modelIndex: selectedModels.length,
-          totalModels: selectedModels.length
+          modelIndex: roster.length,
+          totalModels: roster.length
         });
 
         // Hand the new question to the animated stage before the models start answering.
-        startBoardForQuestion(question, qIdx + 1, limitedQuestions.length);
-        pushEvent('ask', `Question ${qIdx + 1}/${limitedQuestions.length} (${question.source}, ${question.contextType}) sent to ${selectedModels.length} model${selectedModels.length > 1 ? 's' : ''}`);
+        startBoardForQuestion(question, qIdx + 1, limitedQuestions.length, roster);
+        pushEvent('ask', `Question ${qIdx + 1}/${limitedQuestions.length} (${question.source}, ${question.contextType}) sent to ${roster.length} model${roster.length > 1 ? 's' : ''}`);
 
         // Evaluate this question for all models concurrently. On resume, an already
         // answered question returns its stored result (see evaluateQuestionForAllModels).
-        await evaluateQuestionForAllModels(question, qIdx, limitedQuestions.length, resume ? results : []);
+        await evaluateQuestionForAllModels(question, qIdx, limitedQuestions.length, resume ? results : [], roster);
 
         if (stopRef.current || runController.signal.aborted) {
           // Cancelled during this question. It will be re-run on resume so every model
@@ -1132,6 +1195,9 @@ No explanation, no thinking, just the letter.`;
     clearPersistence();
     runPlanRef.current = null;
     setRunPlan(null);
+    // Release the frozen roster: only a full reset re-enables model editing.
+    runModelsRef.current = null;
+    setRunModels(null);
     stopRef.current = false;
   };
 
@@ -1170,14 +1236,14 @@ No explanation, no thinking, just the letter.`;
   };
 
   const panels = [
-    { id: 'setup', label: 'Setup', icon: Settings, enabled: true },
-    { id: 'agents', label: 'Agents', icon: Gauge, enabled: true },
+    { id: 'setup', label: t('eval.setup'), icon: Settings, enabled: true },
+    { id: 'agents', label: t('eval.agents'), icon: Gauge, enabled: true },
     // Always openable. It used to be disabled unless a run was in flight, which made the
     // animated stage impossible to find: you had to start an evaluation before you could
     // even open the tab that shows it. At idle it now explains what will appear here.
-    { id: 'live', label: 'Live', icon: Activity, enabled: true },
-    { id: 'results', label: 'Results', icon: BarChart3, enabled: hasResults },
-    { id: 'details', label: 'Details', icon: ListChecks, enabled: hasResults },
+    { id: 'live', label: t('eval.live'), icon: Activity, enabled: true },
+    { id: 'results', label: t('eval.results'), icon: BarChart3, enabled: hasResults },
+    { id: 'details', label: t('eval.details'), icon: ListChecks, enabled: hasResults },
   ];
 
   const allAgentsEnabled = Object.values(enabledAgents).every(v => v);
@@ -1304,20 +1370,20 @@ No explanation, no thinking, just the letter.`;
         <div className="flex items-center gap-3">
           <div className="eval-mark" aria-hidden="true">
             <svg width="34" height="34" viewBox="0 0 34 34" fill="none">
-              <circle cx="17" cy="17" r="4.5" fill="#22d3ee" />
-              <ellipse cx="17" cy="17" rx="13" ry="6" stroke="rgba(34,211,238,.45)" strokeWidth="1.4" transform="rotate(-24 17 17)" />
-              <ellipse cx="17" cy="17" rx="13" ry="6" stroke="rgba(167,139,250,.4)" strokeWidth="1.2" transform="rotate(38 17 17)" />
-              <circle cx="28" cy="11" r="1.6" fill="#4ade80" />
+              <circle cx="17" cy="17" r="4.5" fill="#e1320f" />
+              <ellipse cx="17" cy="17" rx="13" ry="6" stroke="rgba(225,50,15,.55)" strokeWidth="1.4" transform="rotate(-24 17 17)" />
+              <ellipse cx="17" cy="17" rx="13" ry="6" stroke="rgba(0,99,163,.5)" strokeWidth="1.2" transform="rotate(38 17 17)" />
+              <circle cx="28" cy="11" r="1.6" fill="#0063a3" />
             </svg>
           </div>
           <div>
-            <h1>Model Evaluation</h1>
-            <p>Run the BBQ benchmark against your models — accuracy, latency and bias, scored locally</p>
+            <h1>{t('eval.title')}</h1>
+            <p>{t('eval.subtitle')}</p>
           </div>
         </div>
         <div className="status-badge">
           <span className={`status-dot status-${availableModels.length > 0 ? 'connected' : 'disconnected'}`}></span>
-          {availableModels.length > 0 ? `${availableModels.length} models available` : 'No providers connected'}
+          {availableModels.length > 0 ? `${availableModels.length} ${t('eval.modelsAvailable')}` : t('eval.noProviders')}
         </div>
         {agentNotifications.length > 0 && (
           <button
@@ -1325,7 +1391,7 @@ No explanation, no thinking, just the letter.`;
             className="notification-bell"
             onClick={() => setShowNotificationModal(true)}
             aria-label={`Open ${agentNotifications.length} agent notification${agentNotifications.length !== 1 ? 's' : ''}`}
-            title={`${agentNotifications.length} agent notification${agentNotifications.length !== 1 ? 's' : ''}`}
+            title={t('eval.notifications')}
           >
             <Bell className="w-5 h-5" />
             <span className="notification-count">{agentNotifications.length}</span>
@@ -1344,25 +1410,25 @@ No explanation, no thinking, just the letter.`;
             className="notification-modal"
             role="dialog"
             aria-modal="true"
-            aria-label="Agent notifications"
+            aria-label={t('eval.agentNotifications')}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="notification-header">
               <div className="notification-header-left">
                 <Bell className="w-5 h-5" />
-                <h3>Agent Notifications</h3>
+                <h3>{t('eval.agentNotifications')}</h3>
                 <div className="notification-severity-badges">
                   {notificationCounts.critical > 0 && (
-                    <span className="severity-badge critical">{notificationCounts.critical} critical</span>
+                    <span className="severity-badge critical">{t('eval.severity.critical', { n: notificationCounts.critical })}</span>
                   )}
                   {notificationCounts.error > 0 && (
-                    <span className="severity-badge error">{notificationCounts.error} error</span>
+                    <span className="severity-badge error">{t('eval.severity.error', { n: notificationCounts.error })}</span>
                   )}
                   {notificationCounts.warning > 0 && (
-                    <span className="severity-badge warning">{notificationCounts.warning} warning</span>
+                    <span className="severity-badge warning">{t('eval.severity.warning', { n: notificationCounts.warning })}</span>
                   )}
                   {notificationCounts.info > 0 && (
-                    <span className="severity-badge info">{notificationCounts.info} info</span>
+                    <span className="severity-badge info">{t('eval.severity.info', { n: notificationCounts.info })}</span>
                   )}
                 </div>
               </div>
@@ -1370,15 +1436,15 @@ No explanation, no thinking, just the letter.`;
                 <button
                   className="btn-secondary btn-small"
                   onClick={clearAllNotifications}
-                  title="Clear all notifications"
+                  title={t('eval.clearAllNotifications')}
                 >
-                  Clear All
+                  {t('eval.clearAllNotifications')}
                 </button>
                 <button
                   className="notification-close"
                   onClick={() => setShowNotificationModal(false)}
-                  title="Close"
-                  aria-label="Close notifications"
+                  title={t('chat.close')}
+                  aria-label={t('eval.closeNotifications')}
                 >
                   <XCircle className="w-5 h-5" />
                 </button>
@@ -1415,7 +1481,7 @@ No explanation, no thinking, just the letter.`;
                           ))}
                           {notification.details.length > 3 && (
                             <li className="more-details">
-                              +{notification.details.length - 3} more details
+                              {t('eval.moreDetails', { n: notification.details.length - 3 })}
                             </li>
                           )}
                         </ul>
@@ -1428,7 +1494,7 @@ No explanation, no thinking, just the letter.`;
                       e.stopPropagation();
                       clearNotification(notification.id);
                     }}
-                    title="Dismiss notification"
+                    title={t('eval.dismiss')}
                   >
                     ×
                   </button>
@@ -1442,7 +1508,7 @@ No explanation, no thinking, just the letter.`;
       {/* Agent Status Summary (when agents panel is active) */}
       {activePanel === 'agents' && agentResults.length > 0 && (
         <div className="agent-status-summary">
-          <h4>Agent Status Summary</h4>
+          <h4>{t('agent.statusSummary')}</h4>
           <div className="agent-status-grid">
             {agentResults.map(result => {
               const agent = AGENTS.find(a => a.id === result.agentId);
@@ -1466,15 +1532,13 @@ No explanation, no thinking, just the letter.`;
                     <div className="agent-status-icon">
                       <IconComponent className="w-4 h-4" />
                     </div>
-                    <span className="agent-status-name">{agent?.name || result.agentId}</span>
+                    <span className="agent-status-name">{t(`agent.${result.agentId}.name`) || agent?.name || result.agentId}</span>
                     <span className={`agent-status-badge ${severityClass}`}>
-                      {result.passed ? '✓ Passed' : 
-                        result.findings.some(f => f.severity === 'critical') ? '✗ Critical' :
-                        result.findings.some(f => f.severity === 'warning') ? '⚠ Warning' : 'ℹ Info'}
+                      {result.passed ? t('agents.passed') : ''}
                     </span>
                   </div>
                   <div className="agent-status-message">
-                    {result.findings[0]?.message || 'No issues found'}
+                    {result.findings[0]?.message || t('agent.noIssues')}
                   </div>
                 </div>
               );
@@ -1508,28 +1572,28 @@ No explanation, no thinking, just the letter.`;
               className="btn-danger btn-large"
               onClick={handleStop}
               disabled={isStopping}
-              title="Cancel the requests that are currently in flight and keep everything scored so far"
+              title={t('eval.stopTitle')}
             >
               {isStopping ? (
                 <>
                   <Loader2 className="w-5 h-5 es-spin" />
-                  Stopping…
+                  {t('eval.stopping')}
                 </>
               ) : (
                 <>
                   <Pause className="w-5 h-5" />
-                  Stop &amp; Keep Results
+                  {t('eval.stop')}
                 </>
               )}
             </button>
             {isStopping && (
               <span className="control-hint">
-                Cancelling {selectedModels.length} in-flight request{selectedModels.length !== 1 ? 's' : ''}…
+                {t('eval.cancelling')}
               </span>
             )}
             {!isStopping && (
               <span className="control-hint">
-                {completedQuestions()}/{runTotal()} questions done
+                {completedQuestions()}/{runTotal()} {t('eval.questionsDone')}
               </span>
             )}
           </>
@@ -1538,17 +1602,16 @@ No explanation, no thinking, just the letter.`;
             <button
               className="btn-primary btn-large"
               onClick={handleContinue}
-              title="Continue with the same questions, keeping the results you already have"
+              title={t('eval.resumeTitle')}
             >
               <Play className="w-5 h-5" />
-              Resume Evaluation ({completedQuestions()}/{runTotal()})
+              {t('eval.resume')} ({completedQuestions()}/{runTotal()})
             </button>
             <span className="control-hint">
-              {Math.max(0, runTotal() - completedQuestions())} question
-              {runTotal() - completedQuestions() === 1 ? '' : 's'} left — nothing is re-run
+              {runTotal() - completedQuestions()} {runTotal() - completedQuestions() === 1 ? t('eval.questionsLeft') : t('eval.questionsLeftPlural')}
             </span>
             <button className="btn-secondary" onClick={handleReset}>
-              <RotateCcw className="w-4 h-4" /> Reset
+              <RotateCcw className="w-4 h-4" /> {t('eval.reset')}
             </button>
           </>
         ) : (
@@ -1559,7 +1622,7 @@ No explanation, no thinking, just the letter.`;
                 onClick={handleContinue}
               >
                 <Play className="w-5 h-5" />
-                Resume Evaluation ({completedQuestions()}/{runTotal()})
+                {t('eval.resumeEvaluation')} ({completedQuestions()}/{runTotal()})
               </button>
             ) : (
               <>
@@ -1569,21 +1632,21 @@ No explanation, no thinking, just the letter.`;
                   disabled={selectedModels.length === 0 || loadedQuestions.length === 0 || isLoadingData}
                   title={
                     loadedQuestions.length === 0
-                      ? 'Load the BBQ dataset first'
+                      ? t('eval.loadDatasetFirstTitle')
                       : selectedModels.length === 0
-                        ? 'Select at least one model first'
-                        : 'Start the evaluation'
+                        ? t('eval.selectModelTitle')
+                        : t('eval.startEvalTitle')
                   }
                 >
                   {isLoadingData ? (
                     <>
                       <Loader2 className="w-5 h-5 es-spin" />
-                      Loading dataset…
+                      {t('eval.loadingDataset')}
                     </>
                   ) : (
                     <>
                       <Play className="w-5 h-5" />
-                      Start Evaluation
+                      {t('eval.start')}
                     </>
                   )}
                 </button>
@@ -1593,18 +1656,18 @@ No explanation, no thinking, just the letter.`;
                 {loadedQuestions.length === 0 && (
                   <span className="control-hint">
                     {isLoadingData
-                      ? 'Reading 58,492 questions from public/data — this can take a minute.'
-                      : 'Press “Load BBQ Data” above first.'}
+                      ? t('eval.startHintData')
+                      : t('eval.startHintLoad')}
                   </span>
                 )}
                 {loadedQuestions.length > 0 && selectedModels.length === 0 && (
-                  <span className="control-hint">Select at least one model above.</span>
+                  <span className="control-hint">{t('eval.startHintModels')}</span>
                 )}
               </>
             )}
             {results.length > 0 && (
               <button className="btn-secondary" onClick={handleReset}>
-                <RotateCcw className="w-4 h-4" /> Reset
+                <RotateCcw className="w-4 h-4" /> {t('eval.reset')}
               </button>
             )}
           </>
@@ -1615,7 +1678,7 @@ No explanation, no thinking, just the letter.`;
             className="btn-secondary"
             onClick={() => setActivePanel('results')}
           >
-            <BarChart3 className="w-4 h-4" /> View Results
+            <BarChart3 className="w-4 h-4" /> {t('eval.viewResults')}
           </button>
         )}
       </div>
@@ -1630,39 +1693,47 @@ No explanation, no thinking, just the letter.`;
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <RefreshCw className="w-5 h-5" style={{ color: 'var(--accent)' }} />
                   <span>
-                    <strong>{isStopped ? 'Evaluation stopped:' : 'Previous evaluation restored:'}</strong>{' '}
-                    {results.length} model{results.length !== 1 ? 's' : ''} evaluated,{' '}
-                    {completedQuestions()} of {runTotal()} questions done
-                    {isStopped && ` — ${runTotal() - completedQuestions()} left`}
+                    <strong>{isStopped ? t('eval.stopped') : t('eval.restored')}</strong>{' '}
+                    {results.length} {t('eval.modelsEvaluated')},{' '}
+                    {t('eval.of')} {runTotal()}: {completedQuestions()}
+                    {isStopped && ` — ${runTotal() - completedQuestions()}`}
                   </span>
                 </div>
                 <button
                   className="btn-secondary btn-small"
                   onClick={handleReset}
                 >
-                  Clear
+                  {t('eval.clear')}
                 </button>
               </div>
             )}
             <div className="model-selection-card">
               <div className="card-header">
-                <h2>Select Models</h2>
+                <h2>{t('eval.selectModels')}</h2>
                 <div className="flex gap-2">
                   <button 
                     className="btn-secondary"
                     onClick={selectAllModels}
-                    disabled={isRunning}
+                    disabled={selectionLocked}
+                    title={selectionLocked ? t('eval.modelsLocked') : undefined}
                   >
-                    {selectedModels.length === availableModels.length ? 'Deselect All' : 'Select All'}
+                    {selectedModels.length === availableModels.length ? t('eval.deselectAll') : t('eval.selectAll')}
                   </button>
                 </div>
               </div>
 
+              {selectionLocked && (
+                <div className="selection-locked-note">
+                  <Lock className="w-4 h-4" />
+                  <span>{t('eval.modelsLockedNote')}</span>
+                </div>
+              )}
+
               <div className="settings-panel">
-                <h4>Generation Options</h4>
+                <h4>{t('eval.generationOptions')}</h4>
                 <div className="settings-grid">
                   <label>
-                    Temperature: {options.temperature}
+                    {t('eval.temperature')}: {options.temperature}
                     <input 
                       type="range" 
                       min="0" 
@@ -1673,7 +1744,7 @@ No explanation, no thinking, just the letter.`;
                     />
                   </label>
                   <label>
-                    Top P: {options.topP}
+                    {t('eval.topP')}: {options.topP}
                     <input 
                       type="range" 
                       min="0" 
@@ -1684,23 +1755,23 @@ No explanation, no thinking, just the letter.`;
                     />
                   </label>
                   <label>
-                    Prompt Style:
+                    {t('eval.promptStyle')}:
                     <select
                       value={options.promptType}
                       onChange={(e) => setOptions({...options, promptType: e.target.value})}
                     >
-                      <option value="standard">Standard (fairness)</option>
-                      <option value="tricky">Tricky (truthful)</option>
+                      <option value="standard">{t('eval.promptStandard')}</option>
+                      <option value="tricky">{t('eval.promptTricky')}</option>
                     </select>
                   </label>
                   <label>
-                    Questions per Category:
+                    {t('eval.questionsPerCategory')}:
                     <select 
                       value={questionLimit}
                       onChange={(e) => setQuestionLimit(parseInt(e.target.value))}
                       disabled={loadedQuestions.length === 0}
                     >
-                      <option value="0">All questions</option>
+                      <option value="0">{t('eval.allQuestions')}</option>
                       <option value="5">5</option>
                       <option value="10">10</option>
                       <option value="20">20</option>
@@ -1712,14 +1783,14 @@ No explanation, no thinking, just the letter.`;
               </div>
 
               <div className="settings-panel">
-                <h4>Data Configuration</h4>
+                <h4>{t('eval.dataConfig')}</h4>
 
                 {/* Cache Status */}
                 {cacheStatus && cacheStatus.cached && (
                   <div className="cache-status">
                     <span>📦</span>
                     <span>
-                      <strong>{cacheStatus.count.toLocaleString()}</strong> questions cached
+                      <strong>{cacheStatus.count.toLocaleString()}</strong> {t('eval.cached')}
                       ({cacheStatus.sizeMB} MB)
                     </span>
                   </div>
@@ -1747,8 +1818,13 @@ No explanation, no thinking, just the letter.`;
                     </div>
                     <div className="progress-text">
                       {loadProgress.total
-                        ? `Loading ${loadProgress.category}… (${loadProgress.current}/${loadProgress.total}) · ${Math.round((loadProgress.elapsed || 0) / 1000)}s`
-                        : `Checking cache and reading public/data… ${Math.round((loadProgress.elapsed || 0) / 1000)}s`}
+                        ? t('eval.loadingCategory', {
+                            cat: loadProgress.category,
+                            a: loadProgress.current,
+                            b: loadProgress.total,
+                            s: Math.round((loadProgress.elapsed || 0) / 1000),
+                          })
+                        : t('eval.checkingCache', { s: Math.round((loadProgress.elapsed || 0) / 1000) })}
                     </div>
                   </div>
                 )}
@@ -1760,10 +1836,10 @@ No explanation, no thinking, just the letter.`;
                     disabled={isLoadingData}
                   >
                     {isLoadingData 
-                      ? 'Loading...' 
+                      ? t('eval.loadingDots')
                       : cacheStatus?.cached 
-                        ? 'Load from Cache' 
-                        : 'Load BBQ Data'}
+                        ? t('eval.loadFromCache') 
+                        : t('eval.loadBBQData')}
                   </button>
                   
                   {cacheStatus?.cached && (
@@ -1771,9 +1847,9 @@ No explanation, no thinking, just the letter.`;
                       className="btn-secondary"
                       onClick={() => loadGithubData(true)}
                       disabled={isLoadingData}
-                      title="Force refresh from the static data files"
+                      title={t('eval.refresh')}
                     >
-                      <RefreshCw className="w-4 h-4" /> Refresh
+                      <RefreshCw className="w-4 h-4" /> {t('eval.refresh')}
                     </button>
                   )}
                   
@@ -1782,15 +1858,15 @@ No explanation, no thinking, just the letter.`;
                       className="btn-secondary"
                       onClick={handleClearCache}
                       disabled={isLoadingData}
-                      title="Clear cached data"
+                      title={t('eval.clearCacheTitle')}
                     >
-                      Clear Cache
+                      {t('eval.clearCache')}
                     </button>
                   )}
                   
                   {loadedQuestions.length > 0 && !isLoadingData && (
                     <span className="loaded-count">
-                      {loadedQuestions.length.toLocaleString()} questions loaded
+                      {loadedQuestions.length.toLocaleString()} {t('eval.loaded')}
                     </span>
                   )}
                 </div>
@@ -1803,8 +1879,8 @@ No explanation, no thinking, just the letter.`;
                       <>
                         <ShieldCheck className="w-4 h-4" />
                         <span>
-                          Scoring metadata loaded ({metadataStatus.rows.toLocaleString()} rows)
-                          — bias target per example from <code>target_loc</code>
+                          {t('eval.metaReady')}
+                          — <code>target_loc</code>
                         </span>
                       </>
                     )}
@@ -1812,8 +1888,8 @@ No explanation, no thinking, just the letter.`;
                       <>
                         <AlertTriangle className="w-4 h-4" />
                         <span>
-                          Scoring metadata unavailable — bias target falls back to
-                          stereotyped-group labels, scores will be approximate
+                          {t('eval.metaUnavailable')}
+                          
                         </span>
                       </>
                     )}
@@ -1832,7 +1908,7 @@ No explanation, no thinking, just the letter.`;
                           }
                         }}
                       />
-                      <strong>All Categories</strong>
+                      <strong>{t('eval.allCategories')}</strong>
                     </label>
                     {[...new Set(loadedQuestions.map(q => q.source))].sort().map(cat => (
                       <label key={cat} className="category-label">
@@ -1871,12 +1947,12 @@ No explanation, no thinking, just the letter.`;
                 <div className="flex items-center justify-between" style={{ marginBottom: '10px' }}>
                   <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <Globe className="w-4 h-4" />
-                    Provider:
+                    {t('eval.provider')}:
                     <select
                       value={selectedProviderFilter || ''}
                       onChange={(e) => setSelectedProviderFilter(e.target.value || null)}
                     >
-                      <option value="">All Providers</option>
+                      <option value="">{t('eval.allProviders')}</option>
                       {[...new Map(availableModels.map(m => [m.providerId, { id: m.providerId, name: m.provider }])).values()].map(p => (
                         <option key={p.id} value={p.id}>{p.name}</option>
                       ))}
@@ -1887,12 +1963,12 @@ No explanation, no thinking, just the letter.`;
                     onClick={() => setProviderSettingsOpen(true)}
                   >
                     <Settings className="w-4 h-4" />
-                    Configure Providers
+                    {t('eval.configureProviders')}
                   </button>
                 </div>
                 {availableModels.length === 0 && (
                   <div className="control-hint">
-                    No models available. Configure and enable a provider to see models.
+                    {t('eval.noModels')}
                   </div>
                 )}
               </div>
@@ -1910,7 +1986,7 @@ No explanation, no thinking, just the letter.`;
                       type="checkbox"
                       checked={isModelSelected(model.id)}
                       onChange={() => toggleModelSelection(model.id)}
-                      disabled={isRunning}
+                      disabled={selectionLocked}
                     />
                     <div className="model-info">
                       <span className="model-name">{model.name}</span>
@@ -1935,7 +2011,7 @@ No explanation, no thinking, just the letter.`;
               </div>
               
               <div className="selected-count">
-                {selectedModels.length} model(s) selected
+                {selectedModels.length} {t('eval.selectedCount')}
               </div>
             </div>
 
@@ -1943,15 +2019,15 @@ No explanation, no thinking, just the letter.`;
               <div className="info-message">
                 <Info className="w-5 h-5" />
                 <div>
-                  <strong>How it works:</strong>
+                  <strong>{t('eval.howItWorks')}:</strong>
                   <ul>
-                    <li>Select one or more models from your Ollama instance</li>
-                    <li>Click "Start Evaluation" to run the BBQ benchmark</li>
-                    <li>The system will test each model on {(() => {
+                    <li>{t('eval.hiw1')}</li>
+                    <li>{t('eval.hiw2')}</li>
+                    <li>{t('eval.hiw3', { n: (() => {
                       const cats = selectedCategories.length > 0 ? selectedCategories : [...new Set(loadedQuestions.map(q => q.source))];
                       return questionLimit > 0 ? questionLimit * cats.length : loadedQuestions.length;
-                    })()} questions</li>
-                    <li>Results include accuracy, response times, and bias analysis</li>
+                    })() })}</li>
+                    <li>{t('eval.hiw4')}</li>
                   </ul>
                 </div>
               </div>
@@ -1963,14 +2039,14 @@ No explanation, no thinking, just the letter.`;
           <div className="results-section">
             <div className="agents-panel-container">
               <div className="agents-panel-header">
-                <h3>Quality Assurance Agents</h3>
+                <h3>{t('agents.title')}</h3>
                 <div className="agents-header-actions">
                   <button
                     className={`btn-secondary ${allAgentsEnabled ? 'active' : ''}`}
                     onClick={toggleAllAgents}
                     type="button"
                   >
-                    {allAgentsEnabled ? 'Disable All' : 'Enable All'}
+                    {allAgentsEnabled ? t('agents.disableAll') : t('agents.enableAll')}
                   </button>
                   {(agentResults.length > 0 || results.length > 0) && (
                     <button
@@ -1979,19 +2055,19 @@ No explanation, no thinking, just the letter.`;
                       disabled={isRunning}
                       type="button"
                     >
-                      Run Agents Now
+                      {t('agents.runNow')}
                     </button>
                   )}
                 </div>
               </div>
               <p className="agents-description">
-                Enable agents to perform quality checks during evaluation. Each agent analyzes different aspects of model performance.
+                {t('agents.description')}
               </p>
               
               {/* Agent Status Summary */}
               {agentResults.length > 0 && (
                 <div className="agent-results-summary">
-                  <h4>Latest Agent Results</h4>
+                  <h4>{t('agent.latestResults')}</h4>
                   <div className="agent-results-grid">
                     {agentResults.map(result => {
                       const agent = AGENTS.find(a => a.id === result.agentId);
@@ -2015,15 +2091,15 @@ No explanation, no thinking, just the letter.`;
                             <div className="agent-result-icon">
                               <IconComponent className="w-4 h-4" />
                             </div>
-                            <span className="agent-result-name">{agent?.name || result.agentId}</span>
+                            <span className="agent-result-name">{t(`agent.${result.agentId}.name`) || agent?.name || result.agentId}</span>
                             <span className={`agent-result-badge ${severityClass}`}>
-                              {result.passed ? '✓ Passed' : 
-                                result.findings.some(f => f.severity === 'critical') ? '✗ Critical' :
-                                result.findings.some(f => f.severity === 'warning') ? '⚠ Warning' : 'ℹ Info'}
+                              {result.passed ? t('agent.pass') : 
+                                result.findings.some(f => f.severity === 'critical') ? t('agent.critical') :
+                                result.findings.some(f => f.severity === 'warning') ? t('agent.warning') : t('agent.info')}
                             </span>
                           </div>
                           <div className="agent-result-message">
-                            {result.findings[0]?.message || 'No issues found'}
+                            {result.findings[0]?.message || t('agent.noIssues')}
                           </div>
                           {result.findings[0]?.details && result.findings[0].details.length > 0 && (
                             <div className="agent-result-details">
@@ -2035,7 +2111,7 @@ No explanation, no thinking, just the letter.`;
                                 ))}
                                 {result.findings[0].details.length > 3 && (
                                   <li className="more-details">
-                                    +{result.findings[0].details.length - 3} more
+                                    {t('eval.more', { n: result.findings[0].details.length - 3 })}
                                   </li>
                                 )}
                               </ul>
@@ -2069,17 +2145,17 @@ No explanation, no thinking, just the letter.`;
                           <IconComponent className="w-5 h-5" />
                         </div>
                         <div className="agent-card-info">
-                          <h4>{agent.name}</h4>
-                          <p>{agent.description}</p>
+                          <h4>{t(`agent.${agent.id}.name`)}</h4>
+                          <p>{t(`agent.${agent.id}.desc`)}</p>
                         </div>
                       </div>
                       <div className="agent-card-status">
                         {agentResult ? (
                           <span className={`agent-status ${agentResult.passed ? 'passed' : 'failed'}`}>
-                            {agentResult.passed ? '✓ Passed' : `⚠ ${agentResult.findings[0]?.severity || 'Issues'}`}
+                            {agentResult.passed ? t('agents.passed') : '⚠'}
                           </span>
                         ) : (
-                          <span className="agent-status pending">Pending run</span>
+                          <span className="agent-status pending">{t('agents.pending')}</span>
                         )}
                       </div>
                       <button
@@ -2105,17 +2181,9 @@ No explanation, no thinking, just the letter.`;
               <div className="panel-empty">
                 <Activity className="w-5 h-5" />
                 <div>
-                  <div className="panel-empty-title">Nothing is running yet</div>
-                  <div className="panel-empty-message">
-                    This tab is the live view of an evaluation: the question and its three options,
-                    a card per model showing what it answered and which option role it picked, the
-                    running accuracy and bias figures, and a timestamped feed of what the app is
-                    doing in the background.
-                  </div>
-                  <div className="panel-empty-message" style={{ marginTop: 10 }}>
-                    Press <strong>Start Evaluation</strong> on the Setup tab — this page fills in as
-                    soon as the first question goes out, and keeps its last state when you stop.
-                  </div>
+                  <div className="panel-empty-title">{t('live.idleTitle')}</div>
+                  <div className="panel-empty-message">{t('live.idleBody')}</div>
+                  <div className="panel-empty-message" style={{ marginTop: 10 }}>{t('live.idleBody2')}</div>
                 </div>
               </div>
             )}
@@ -2154,7 +2222,7 @@ No explanation, no thinking, just the letter.`;
               <UnifiedAnswerDistribution results={results} />
 
               <h3 style={{ margin: '10px 0 4px', color: 'var(--ink)', fontSize: '1.1rem', fontWeight: 650 }}>
-                Individual Model Results
+                {t('live.individual')}
               </h3>
               <div className="charts-grid">
                 {results.map((result) => (
@@ -2163,7 +2231,7 @@ No explanation, no thinking, just the letter.`;
               </div>
             </div>
           ) : (
-            renderEmptyPanel('No results yet', 'Run an evaluation to generate results.')
+            renderEmptyPanel(t('live.emptyResults'), t('live.runFirst'))
           )
         )}
 
@@ -2180,15 +2248,15 @@ No explanation, no thinking, just the letter.`;
                   </h3>
                   <div className="result-stats">
                     <div className="result-stat">
-                      <span className="result-stat-label">Accuracy</span>
+                      <span className="result-stat-label">{t('eval.accuracy')}</span>
                       <span className="result-stat-value">{(result.accuracy?.overall || 0).toFixed(1)}%</span>
                     </div>
                     <div className="result-stat">
-                      <span className="result-stat-label">Correct</span>
+                      <span className="result-stat-label">{t('eval.correct')}</span>
                       <span className="result-stat-value">{result.correct || 0}</span>
                     </div>
                     <div className="result-stat">
-                      <span className="result-stat-label">Avg Time</span>
+                      <span className="result-stat-label">{t('eval.avgTime')}</span>
                       <span className="result-stat-value">{((result.averageResponseTime || 0) / 1000).toFixed(2)}s</span>
                     </div>
                   </div>
@@ -2200,7 +2268,7 @@ No explanation, no thinking, just the letter.`;
               </div>
             </div>
           ) : (
-            renderEmptyPanel('No details available', 'Run an evaluation to view model-level details.')
+            renderEmptyPanel(t('live.noDetails'), t('live.runFirst'))
           )
         )}
       </div>

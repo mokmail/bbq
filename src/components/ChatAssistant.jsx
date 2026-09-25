@@ -10,6 +10,7 @@ import {
   ChevronRight,
   Loader2
 } from 'lucide-react';
+import { t, useLang } from '../services/i18n';
 import { 
   processUserQuery, 
   getSuggestedQuestions, 
@@ -20,6 +21,7 @@ import './ChatAssistant.css';
 
 
 const ChatAssistant = ({ results, isOpen, onToggle }) => {
+  useLang();
   const [messages, setMessages] = useState(null); // null = use derived welcome state
   const [inputValue, setInputValue] = useState('');
   const [isMinimized, setIsMinimized] = useState(false);
@@ -29,7 +31,7 @@ const ChatAssistant = ({ results, isOpen, onToggle }) => {
   setEvaluationContext(results);
   const welcomeMessage = results?.length > 0 ? {
     type: MessageTypes.ASSISTANT,
-    content: 'Hello! I am your BBQ evaluation assistant. I can help you understand the results from ' + results.length + ' model(s) that were evaluated.\n\nWhat would you like to know?',
+    content: t('chat.welcome', { n: results.length }),
     suggestions: getSuggestedQuestions().slice(0, 4)
   } : null;
   const visibleMessages = messages || (welcomeMessage ? [welcomeMessage] : []);
@@ -127,10 +129,10 @@ const ChatAssistant = ({ results, isOpen, onToggle }) => {
               React.createElement(Bot, { className: 'w-5 h-5' })
             ),
             React.createElement('div', { className: 'chat-header-info' },
-              React.createElement('h3', { className: 'chat-title' }, 'BBQ Assistant'),
+              React.createElement('h3', { className: 'chat-title' }, t('chat.title')),
               React.createElement('span', { className: 'chat-status' },
                 React.createElement('span', { className: 'chat-status-dot' }),
-                'Ready to help'
+                t('chat.status')
               )
             )
           ),
@@ -138,12 +140,12 @@ const ChatAssistant = ({ results, isOpen, onToggle }) => {
             React.createElement('button', {
               className: 'chat-action-btn',
               onClick: () => setIsMinimized(!isMinimized),
-              title: isMinimized ? 'Expand' : 'Minimize'
+              title: isMinimized ? t('chat.maximize') : t('chat.minimize')
             }, isMinimized ? React.createElement(Maximize2, { className: 'w-4 h-4' }) : React.createElement(Minimize2, { className: 'w-4 h-4' })),
             React.createElement('button', {
               className: 'chat-action-btn',
               onClick: onToggle,
-              title: 'Close'
+              title: t('chat.close')
             }, React.createElement(X, { className: 'w-4 h-4' }))
           )
         ),
@@ -152,7 +154,7 @@ const ChatAssistant = ({ results, isOpen, onToggle }) => {
             messages.length === 0 ?
               React.createElement('div', { className: 'chat-empty-state' },
                 React.createElement(Sparkles, { className: 'w-12 h-12' }),
-                React.createElement('p', null, 'Ask me anything about your evaluation results!'),
+                React.createElement('p', null, t('chat.empty')),
                 React.createElement('div', { className: 'chat-empty-suggestions' },
                   getSuggestedQuestions().slice(0, 3).map((q, i) =>
                     React.createElement('button', {
@@ -207,7 +209,7 @@ const ChatAssistant = ({ results, isOpen, onToggle }) => {
               React.createElement('input', {
                 type: 'text',
                 className: 'chat-input',
-                placeholder: 'Ask about results, bias, recommendations...',
+                placeholder: t('chat.placeholder'),
                 value: inputValue,
                 onChange: (e) => setInputValue(e.target.value),
                 onKeyPress: handleKeyPress,
@@ -220,7 +222,7 @@ const ChatAssistant = ({ results, isOpen, onToggle }) => {
               }, isTyping ? React.createElement(Loader2, { className: 'w-4 h-4 spin' }) : React.createElement(Send, { className: 'w-4 h-4' }))
             ),
             messages.length > 0 &&
-              React.createElement('button', { className: 'chat-clear-btn', onClick: clearChat }, 'Clear chat')
+              React.createElement('button', { className: 'chat-clear-btn', onClick: clearChat }, t('chat.clear'))
           )
         )
       )

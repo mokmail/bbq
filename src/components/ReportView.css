@@ -8,15 +8,15 @@
   margin: 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 28px;
 }
 
 /* empty state */
 .report-empty {
   display: flex;
   align-items: flex-start;
-  gap: 12px;
-  padding: 26px 28px;
+  gap: 16px;
+  padding: 30px 32px;
   border: 1px dashed var(--line-strong);
   border-radius: var(--radius);
   background: var(--panel-2);
@@ -31,29 +31,29 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 16px;
+  gap: 20px;
   flex-wrap: wrap;
-  padding: 18px 22px;
+  padding: 22px 26px;
   border-radius: var(--radius);
   border: 1px solid var(--line-strong);
   background:
-    radial-gradient(600px 240px at 92% -30%, rgba(29, 78, 216, 0.08), transparent 65%),
+    radial-gradient(600px 240px at 92% -30%, rgba(0, 99, 163, 0.08), transparent 65%),
     var(--panel);
   box-shadow: var(--shadow-soft);
 }
 
-.report-title { display: flex; align-items: center; gap: 12px; color: var(--accent); }
+.report-title { display: flex; align-items: center; gap: 16px; color: var(--accent); }
 .report-title h1 { margin: 0; font-size: 20px; font-weight: 700; color: var(--ink); letter-spacing: -0.01em; }
 .report-title p { margin: 3px 0 0; font-size: 12.5px; color: var(--muted); }
 
-.report-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.report-actions { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
 
 .report-export, .report-print {
   display: inline-flex;
   align-items: center;
   gap: 8px;
   padding: 9px 16px;
-  border-radius: var(--radius-sm);
+  border-radius: 3px;
   font-weight: 650;
   font-size: 13px;
   border: 1px solid transparent;
@@ -62,7 +62,7 @@
 .report-export {
   background: var(--accent);
   color: #fff;
-  box-shadow: 0 4px 14px rgba(29, 78, 216, 0.28);
+  box-shadow: 0 4px 14px rgba(0, 99, 163, 0.28);
 }
 .report-export:hover:not(:disabled) { background: var(--accent-bright); transform: translateY(-1px); }
 .report-print {
@@ -77,14 +77,14 @@
 .report-meta {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 12px;
+  gap: 18px;
 }
 
 .report-meta-card {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 13px 16px;
+  gap: 16px;
+  padding: 16px 18px;
   border: 1px solid var(--line);
   border-radius: 14px;
   background: var(--panel-2);
@@ -106,7 +106,7 @@
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--panel);
-  padding: 20px 22px;
+  padding: 24px 26px;
   box-shadow: var(--shadow-soft);
   position: relative;
 }
@@ -114,7 +114,7 @@
 .report-section-title {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 12px;
   font-size: 14.5px;
   font-weight: 650;
   color: var(--ink);

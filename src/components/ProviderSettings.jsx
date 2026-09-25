@@ -8,6 +8,7 @@ import {
   PROVIDER_TYPES,
   PROVIDER_DEFAULTS 
 } from '../services/providerService';
+import { t, useLang } from '../services/i18n';
 
 const PROVIDER_TYPE_OPTIONS = [
   { value: PROVIDER_TYPES.OLLAMA, label: 'Ollama (Local)' },
@@ -17,6 +18,7 @@ const PROVIDER_TYPE_OPTIONS = [
 ];
 
 export default function ProviderSettings({ isOpen, onClose, onProviderAdded }) {
+  useLang();
   const [providers, setProviders] = useState([]);
   const [showAddForm, setShowAddForm] = useState(false);
   const [testingId, setTestingId] = useState(null);
@@ -82,7 +84,7 @@ export default function ProviderSettings({ isOpen, onClose, onProviderAdded }) {
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[80vh] overflow-hidden">
         <div className="flex items-center justify-between p-4 border-b">
-          <h2 className="text-xl font-bold text-gray-800">AI Providers</h2>
+          <h2 className="text-xl font-bold text-gray-800">{t('provider.title')}</h2>
           <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg">
             <X className="w-5 h-5" />
           </button>
@@ -104,7 +106,7 @@ export default function ProviderSettings({ isOpen, onClose, onProviderAdded }) {
                     {provider.host}
                   </div>
                   {provider.model && (
-                    <div className="text-sm text-gray-500">Model: {provider.model}</div>
+                    <div className="text-sm text-gray-500">{t('provider.model')} {provider.model}</div>
                   )}
                 </div>
                 <div className="flex items-center gap-2">
@@ -112,7 +114,7 @@ export default function ProviderSettings({ isOpen, onClose, onProviderAdded }) {
                     onClick={() => handleTest(provider)}
                     disabled={testingId === provider.id}
                     className="p-2 hover:bg-gray-100 rounded-lg text-blue-600"
-                    title="Test Connection"
+                    title={t('provider.testConnection')}
                   >
                     {testingId === provider.id ? (
                       <Loader2 className="w-4 h-4 animate-spin" />
@@ -130,7 +132,7 @@ export default function ProviderSettings({ isOpen, onClose, onProviderAdded }) {
               </div>
               {testResult?.id === provider.id && (
                 <div className={`mt-2 text-sm ${testResult.success ? 'text-green-600' : 'text-red-600'}`}>
-                  {testResult.success ? `Connected! Found ${testResult.models?.length || 0} models.` : `Failed: ${testResult.error}`}
+                  {testResult.success ? t('provider.connected', { n: testResult.models?.length || 0 }) : t('provider.failed', { e: testResult.error })}
                 </div>
               )}
             </div>
@@ -138,11 +140,11 @@ export default function ProviderSettings({ isOpen, onClose, onProviderAdded }) {
 
           {showAddForm ? (
             <div className="border rounded-lg p-4 bg-gray-50">
-              <h3 className="font-medium text-gray-800 mb-3">Add New Provider</h3>
+              <h3 className="font-medium text-gray-800 mb-3">{t('provider.addNew')}</h3>
               
               <div className="space-y-3">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Provider Type</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{t('provider.type')}</label>
                   <select
                     value={formData.type}
                     onChange={(e) => handleTypeChange(e.target.value)}
@@ -155,7 +157,7 @@ export default function ProviderSettings({ isOpen, onClose, onProviderAdded }) {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{t('provider.name')}</label>
                   <input
                     type="text"
                     value={formData.name}
@@ -166,7 +168,7 @@ export default function ProviderSettings({ isOpen, onClose, onProviderAdded }) {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Host URL</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{t('provider.host')}</label>
                   <input
                     type="text"
                     value={formData.host}
@@ -180,7 +182,7 @@ export default function ProviderSettings({ isOpen, onClose, onProviderAdded }) {
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       <Key className="w-4 h-4 inline mr-1" />
-                      API Key
+                      {t('provider.apiKey')}
                     </label>
                     <input
                       type="password"
@@ -193,7 +195,7 @@ export default function ProviderSettings({ isOpen, onClose, onProviderAdded }) {
                 )}
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Default Model</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{t('provider.defaultModel')}</label>
                   <input
                     type="text"
                     value={formData.model}
@@ -208,13 +210,13 @@ export default function ProviderSettings({ isOpen, onClose, onProviderAdded }) {
                     onClick={handleAdd}
                     className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
                   >
-                    Add Provider
+                    {t('provider.add')}
                   </button>
                   <button
                     onClick={() => setShowAddForm(false)}
                     className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
                   >
-                    Cancel
+                    {t('provider.cancel')}
                   </button>
                 </div>
               </div>
@@ -225,7 +227,7 @@ export default function ProviderSettings({ isOpen, onClose, onProviderAdded }) {
               className="w-full flex items-center justify-center gap-2 p-3 border-2 border-dashed border-gray-300 rounded-lg text-gray-600 hover:border-blue-400 hover:text-blue-600"
             >
               <Plus className="w-5 h-5" />
-              Add Provider
+              {t('provider.add')}
             </button>
           )}
         </div>

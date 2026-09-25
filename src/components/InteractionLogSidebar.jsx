@@ -18,8 +18,10 @@ import {
   Copy,
   Expand
 } from 'lucide-react';
+import { t, useLang } from '../services/i18n';
 
 const InteractionLogSidebar = ({ interactions, isOpen, onToggle, currentInteraction }) => {
+  useLang();
   const [expandedItems, setExpandedItems] = useState({});
   const [filter, setFilter] = useState('all'); // all, correct, incorrect
   const [searchTerm, setSearchTerm] = useState('');
@@ -64,12 +66,12 @@ const InteractionLogSidebar = ({ interactions, isOpen, onToggle, currentInteract
   const exportLog = () => {
     const logText = interactions.map(i => `
 [${new Date(i.timestamp).toLocaleTimeString()}] ${i.modelId}
-Question: ${i.question}
-${i.context ? `Context: ${i.context}` : ''}
-Correct Answer: ${i.correctAnswer}
-Model Answer: ${i.modelAnswer}
-Result: ${i.isCorrect ? 'Correct' : 'Incorrect'}
-Response: ${i.responseText}
+${t('chart.details.question')} ${i.question}
+${i.context ? `${t('log.context')} ${i.context}` : ''}
+${t('chart.details.correctAnswer')} ${i.correctAnswer}
+${t('log.modelLabel', { v: i.modelAnswer })}
+Result: ${i.isCorrect ? t('log.correct') : t('log.incorrect')}
+${t('log.modelResponse')} ${i.responseText}
 ---
 `).join('\n');
 
@@ -94,7 +96,7 @@ Response: ${i.responseText}
       <button 
         className={`log-toggle-btn ${isOpen ? 'open' : ''}`}
         onClick={onToggle}
-        title={isOpen ? 'Close Log' : 'Open Interaction Log'}
+        title={isOpen ? t('log.close') : t('log.open')}
       >
         <MessageSquare className="w-5 h-5" />
         <span className="log-badge">{interactions.length}</span>
@@ -107,7 +109,7 @@ Response: ${i.responseText}
         <div className="log-header">
           <div className="log-header-title">
             <MessageSquare className="w-5 h-5" />
-            <h3>Interaction Log</h3>
+            <h3>{t('log.title')}</h3>
           </div>
           <div className="log-stats">
             <span className="log-stat correct">
@@ -127,7 +129,7 @@ Response: ${i.responseText}
             <Search className="w-4 h-4" />
             <input 
               type="text" 
-              placeholder="Search interactions..."
+              placeholder={t('log.search')}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
@@ -137,19 +139,19 @@ Response: ${i.responseText}
               className={filter === 'all' ? 'active' : ''}
               onClick={() => setFilter('all')}
             >
-              All
+              {t('log.all')}
             </button>
             <button 
               className={filter === 'correct' ? 'active' : ''}
               onClick={() => setFilter('correct')}
             >
-              Correct
+              {t('log.correct')}
             </button>
             <button 
               className={filter === 'incorrect' ? 'active' : ''}
               onClick={() => setFilter('incorrect')}
             >
-              Incorrect
+              {t('log.incorrect')}
             </button>
           </div>
         </div>
@@ -158,7 +160,7 @@ Response: ${i.responseText}
         <div className="log-list" ref={logContainerRef}>
           {filteredInteractions.length === 0 ? (
             <div className="log-empty">
-              {interactions.length === 0 ? 'No interactions yet' : 'No matching interactions'}
+              {interactions.length === 0 ? t('log.none') : t('log.noMatch')}
             </div>
           ) : (
             filteredInteractions.map((interaction) => {
@@ -195,9 +197,9 @@ Response: ${i.responseText}
                         {interaction.question?.substring(0, 60)}...
                       </div>
                       <div className="log-item-answers">
-                        <span className="answer correct">Correct: {interaction.correctAnswer}</span>
+                        <span className="answer correct">{t('log.correctLabel', { v: interaction.correctAnswer })}</span>
                         <span className={`answer model ${interaction.isCorrect ? 'correct' : 'incorrect'}`}>
-                          Model: {interaction.modelAnswer || 'N/A'}
+                          {t('log.modelLabel', { v: interaction.modelAnswer || t('chart.na') })}
                         </span>
                       </div>
                     </div>
@@ -215,18 +217,18 @@ Response: ${i.responseText}
                     <div className="log-item-details">
                       {interaction.context && (
                         <div className="detail-section">
-                          <strong>Context:</strong>
+                          <strong>{t('log.context')}</strong>
                           <p>{interaction.context}</p>
                         </div>
                       )}
                       
                       <div className="detail-section">
                         <div className="detail-header">
-                          <strong>Full Question:</strong>
+                          <strong>{t('log.fullQuestion')}</strong>
                           <button 
                             className="icon-btn"
                             onClick={() => copyToClipboard(interaction.question)}
-                            title="Copy"
+                            title={t('log.copy')}
                           >
                             <Copy className="w-3 h-3" />
                           </button>
@@ -236,26 +238,26 @@ Response: ${i.responseText}
 
                       <div className="detail-section">
                         <div className="detail-header">
-                          <strong>Model Response:</strong>
+                          <strong>{t('log.modelResponse')}</strong>
                           <button 
                             className="icon-btn"
                             onClick={() => copyToClipboard(interaction.responseText || '')}
-                            title="Copy"
+                            title={t('log.copy')}
                           >
                             <Copy className="w-3 h-3" />
                           </button>
                         </div>
-                        <pre className="response-text">{interaction.responseText || 'No response'}</pre>
+                        <pre className="response-text">{interaction.responseText || t('log.noResponse')}</pre>
                       </div>
 
                       <div className="detail-section">
-                        <strong>Response Time:</strong>
-                        <span>{interaction.responseTime ? `${(interaction.responseTime / 1000).toFixed(2)}s` : 'N/A'}</span>
+                        <strong>{t('log.responseTime')}</strong>
+                        <span>{interaction.responseTime ? `${(interaction.responseTime / 1000).toFixed(2)}s` : t('chart.na')}</span>
                       </div>
 
                       {interaction.tokens > 0 && (
                         <div className="detail-section">
-                          <strong>Tokens:</strong>
+                          <strong>{t('log.tokens')}</strong>
                           <span>{interaction.tokens}</span>
                         </div>
                       )}
@@ -272,10 +274,10 @@ Response: ${i.responseText}
           <div className="log-footer">
             <button className="log-action-btn" onClick={exportLog}>
               <Download className="w-4 h-4" />
-              Export Log
+              {t('log.export')}
             </button>
             <span className="log-count">
-              {filteredInteractions.length} of {interactions.length}
+              {t('log.of', { a: filteredInteractions.length, b: interactions.length })}
             </span>
           </div>
         )}

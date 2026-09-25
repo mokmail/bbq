@@ -5,6 +5,7 @@
 
 import React, { useMemo } from 'react';
 import { CheckCircle, XCircle, HelpCircle, Scale, Trophy, Target, TrendingUp, AlertTriangle } from 'lucide-react';
+import { t, useLang } from '../services/i18n';
 
 // Color scheme for correct/wrong
 const RESULT_COLORS = {
@@ -17,12 +18,12 @@ const RESULT_COLORS = {
 
 // Bias interpretation helper
 const interpretBiasScore = (score) => {
-  if (score >= 0.75) return { label: 'Severe Bias', color: '#DC2626', icon: AlertTriangle };
-  if (score >= 0.5) return { label: 'Strong Bias', color: '#EA580C', icon: AlertTriangle };
-  if (score >= 0.25) return { label: 'Moderate Bias', color: '#D97706', icon: AlertTriangle };
-  if (score > -0.25 && score < 0.25) return { label: 'Fair / Neutral', color: '#16A34A', icon: CheckCircle };
-  if (score <= -0.25) return { label: 'Counter-Bias', color: '#0891B2', icon: Scale };
-  return { label: 'Unknown', color: '#6B7280', icon: HelpCircle };
+  if (score >= 0.75) return { label: t('cmp.bias.severe'), color: '#DC2626', icon: AlertTriangle };
+  if (score >= 0.5) return { label: t('cmp.bias.strong'), color: '#EA580C', icon: AlertTriangle };
+  if (score >= 0.25) return { label: t('cmp.bias.moderate'), color: '#D97706', icon: AlertTriangle };
+  if (score > -0.25 && score < 0.25) return { label: t('cmp.bias.fair'), color: '#16A34A', icon: CheckCircle };
+  if (score <= -0.25) return { label: t('cmp.bias.counter'), color: '#0891B2', icon: Scale };
+  return { label: t('cmp.bias.unknown'), color: '#6B7280', icon: HelpCircle };
 };
 
 // Calculate accuracy from correct/wrong counts
@@ -33,6 +34,7 @@ const calculateAccuracy = (correct, wrong, unanswered = 0) => {
 
 // Enhanced Results Comparison Table
 export const EnhancedResultsComparison = ({ results }) => {
+  useLang();
   const comparisonData = useMemo(() => {
     return results.map((result) => {
       const correct = result.correct || 0;
@@ -66,11 +68,10 @@ export const EnhancedResultsComparison = ({ results }) => {
     <div className="chart-container enhanced-comparison">
       <h3 className="chart-title">
         <Trophy className="w-5 h-5" style={{ display: 'inline', marginRight: '8px' }} />
-        Model Performance Comparison - Correct vs Wrong Analysis
+        {t('cmp.title')}
       </h3>
       <p className="text-sm text-gray-500 mb-4" style={{ paddingLeft: '20px', paddingRight: '20px' }}>
-        Detailed breakdown showing correct answers, wrong answers, and calculated accuracy for each model.
-        Results are sorted by accuracy (highest first).
+        {t('cmp.desc')}
       </p>
 
       {/* Top Performer Banner */}
@@ -88,10 +89,10 @@ export const EnhancedResultsComparison = ({ results }) => {
           <Trophy className="w-8 h-8" style={{ color: RESULT_COLORS.correct }} />
           <div>
             <div style={{ fontWeight: 'bold', fontSize: '16px', color: '#111827' }}>
-              Top Performer: {topPerformer.modelName}
+              {t('cmp.topPerformer')}: {topPerformer.modelName}
             </div>
             <div style={{ color: '#6B7280', fontSize: '14px' }}>
-              {topPerformer.correct} correct out of {topPerformer.total} questions ({topPerformer.accuracy}% accuracy)
+              {t('cmp.correctOf', { c: topPerformer.correct, t: topPerformer.total, a: topPerformer.accuracy })}
             </div>
           </div>
         </div>
@@ -102,28 +103,28 @@ export const EnhancedResultsComparison = ({ results }) => {
         <table className="comparison-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
             <tr style={{ backgroundColor: '#F3F4F6', borderBottom: '2px solid #E5E7EB' }}>
-              <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600' }}>Rank</th>
-              <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600' }}>Model</th>
+              <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600' }}>{t('cmp.rank')}</th>
+              <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600' }}>{t('cmp.model')}</th>
               <th style={{ padding: '12px', textAlign: 'center', fontWeight: '600' }}>
-                <span style={{ color: RESULT_COLORS.correct }}>✓ Correct</span>
+                <span style={{ color: RESULT_COLORS.correct }}>✓ {t('cmp.correct')}</span>
               </th>
               <th style={{ padding: '12px', textAlign: 'center', fontWeight: '600' }}>
-                <span style={{ color: RESULT_COLORS.wrong }}>✗ Wrong</span>
+                <span style={{ color: RESULT_COLORS.wrong }}>✗ {t('cmp.wrong')}</span>
               </th>
               <th style={{ padding: '12px', textAlign: 'center', fontWeight: '600' }}>
-                <span style={{ color: RESULT_COLORS.unanswered }}>? Unanswered</span>
+                <span style={{ color: RESULT_COLORS.unanswered }}>? {t('cmp.unanswered')}</span>
               </th>
               <th style={{ padding: '12px', textAlign: 'center', fontWeight: '600' }}>
                 <Target className="w-4 h-4" style={{ display: 'inline', marginRight: '4px' }} />
-                Accuracy
+                {t('cmp.accuracy')}
               </th>
               <th style={{ padding: '12px', textAlign: 'center', fontWeight: '600' }}>
                 <Scale className="w-4 h-4" style={{ display: 'inline', marginRight: '4px' }} />
-                Bias Score
+                {t('cmp.biasScore')}
               </th>
               <th style={{ padding: '12px', textAlign: 'center', fontWeight: '600' }}>
                 <TrendingUp className="w-4 h-4" style={{ display: 'inline', marginRight: '4px' }} />
-                Status
+                {t('cmp.status')}
               </th>
             </tr>
           </thead>
@@ -253,7 +254,7 @@ export const EnhancedResultsComparison = ({ results }) => {
               <span style={{ fontSize: '20px', fontWeight: 'bold', color: '#111827' }}>{model.wrong}</span>
             </div>
             <div style={{ marginTop: '8px', fontSize: '14px', color: '#6B7280' }}>
-              Accuracy: <strong style={{ color: model.accuracy >= 80 ? RESULT_COLORS.correct : model.accuracy >= 50 ? RESULT_COLORS.bias : RESULT_COLORS.wrong }}>{model.accuracy}%</strong>
+              {t('cmp.accuracy')}: <strong style={{ color: model.accuracy >= 80 ? RESULT_COLORS.correct : model.accuracy >= 50 ? RESULT_COLORS.bias : RESULT_COLORS.wrong }}>{model.accuracy}%</strong>
             </div>
           </div>
         ))}
@@ -264,6 +265,7 @@ export const EnhancedResultsComparison = ({ results }) => {
 
 // Detailed per-question results with Correct/Wrong status
 export const QuestionResultsDetailed = ({ results }) => {
+  useLang();
   const questionAnalysis = useMemo(() => {
     if (!results || results.length === 0) return [];
 
@@ -305,11 +307,10 @@ export const QuestionResultsDetailed = ({ results }) => {
     <div className="chart-container">
       <h3 className="chart-title">
         <CheckCircle className="w-5 h-5" style={{ display: 'inline', marginRight: '8px' }} />
-        Per-Question Results - Correct vs Wrong Analysis
+        {t('cmp.detailedTitle')}
       </h3>
       <p className="text-sm text-gray-500 mb-4" style={{ paddingLeft: '20px', paddingRight: '20px' }}>
-        Shows each question with the correct answer and how each model performed. Green checkmarks indicate correct answers,
-        red X marks indicate wrong answers.
+        {t('cmp.detailedDesc')}
       </p>
 
       <div className="question-list" style={{ maxHeight: '600px', overflowY: 'auto' }}>
@@ -359,12 +360,12 @@ export const QuestionResultsDetailed = ({ results }) => {
                       borderRadius: '4px',
                       fontSize: '12px',
                     }}>
-                      {question.contextType}
+                      {question.contextType === 'ambiguous' ? t('info.ambig') : t('info.disambig')}
                     </span>
                   </div>
                   {question.context && (
                     <div style={{ fontSize: '13px', color: '#6B7280', marginBottom: '4px' }}>
-                      <strong>Context:</strong> {question.context}
+                      <strong>{t('log.context')}</strong> {question.context}
                     </div>
                   )}
                   <div style={{ fontWeight: '600', color: '#111827' }}>{question.question}</div>
@@ -377,7 +378,7 @@ export const QuestionResultsDetailed = ({ results }) => {
                   backgroundColor: '#F0FDF4',
                   borderRadius: '6px',
                 }}>
-                  <span style={{ fontSize: '13px', color: '#6B7280' }}>Correct Answer:</span>
+                  <span style={{ fontSize: '13px', color: '#6B7280' }}>{t('chart.details.correctAnswer')}</span>
                   <span style={{
                     fontSize: '18px',
                     fontWeight: 'bold',
@@ -390,7 +391,7 @@ export const QuestionResultsDetailed = ({ results }) => {
 
               {/* Options */}
               <div style={{ marginBottom: '12px' }}>
-                <div style={{ fontSize: '12px', color: '#6B7280', marginBottom: '4px' }}>Options:</div>
+                <div style={{ fontSize: '12px', color: '#6B7280', marginBottom: '4px' }}>{t('chart.details.options')}</div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                   {question.options?.map((opt, idx) => {
                     const letter = opt.charAt(0);
@@ -476,10 +477,10 @@ export const QuestionResultsDetailed = ({ results }) => {
               }}>
                 <div style={{ display: 'flex', gap: '16px' }}>
                   <span style={{ fontSize: '13px', color: '#6B7280' }}>
-                    <strong style={{ color: RESULT_COLORS.correct }}>{correctCount}</strong> correct
+                    <strong style={{ color: RESULT_COLORS.correct }}>{correctCount}</strong> {t('cmp.correctWord')}
                   </span>
                   <span style={{ fontSize: '13px', color: '#6B7280' }}>
-                    <strong style={{ color: RESULT_COLORS.wrong }}>{wrongCount}</strong> wrong
+                    <strong style={{ color: RESULT_COLORS.wrong }}>{wrongCount}</strong> {t('cmp.wrongWord')}
                   </span>
                 </div>
                 <div style={{
@@ -487,7 +488,7 @@ export const QuestionResultsDetailed = ({ results }) => {
                   fontWeight: '600',
                   color: correctCount === totalModels ? RESULT_COLORS.correct : correctCount === 0 ? RESULT_COLORS.wrong : RESULT_COLORS.bias,
                 }}>
-                  {((correctCount / totalModels) * 100).toFixed(0)}% models correct
+                  {t('cmp.modelsCorrect', { pct: ((correctCount / totalModels) * 100).toFixed(0) })}
                 </div>
               </div>
             </div>

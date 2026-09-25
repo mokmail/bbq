@@ -3,7 +3,8 @@
  * Each agent runs checks and returns findings with severity levels
  */
 
-import { BBQTasks, TaskLabels } from '../data/bbqQuestions';
+import { BBQTasks } from '../data/bbqQuestions';
+import { t, taskLabel } from './i18n';
 
 /**
  * Performance optimization: Limit the number of questions analyzed
@@ -27,25 +28,25 @@ export const QualityAgent = {
     if (loadedQuestions.length === 0) {
       notes.push({
         level: 'warning',
-        text: 'Load the BBQ dataset to unlock evaluation quality checks.'
+        text: t('agent.q.noData')
       });
     }
     if (selectedModels.length === 0) {
       notes.push({
         level: 'warning',
-        text: 'Select at least one model to evaluate for reliable comparisons.'
+        text: t('agent.q.selectModel')
       });
     }
     if (selectedModels.length === 1) {
       notes.push({
         level: 'note',
-        text: 'Single-model runs limit comparative insights; add another model for benchmarking.'
+        text: t('agent.q.oneModel')
       });
     }
     if (questionLimit > 0 && loadedQuestions.length > 0) {
       notes.push({
         level: 'note',
-        text: `Sampling ${questionLimit} questions per category. Increase for higher confidence.`
+        text: t('agent.q.sampling', { n: questionLimit })
       });
     }
     if (results.length > 0) {
@@ -53,21 +54,21 @@ export const QualityAgent = {
       if (avgAccuracy < 55) {
         notes.push({
           level: 'warning',
-          text: 'Average accuracy is low; review prompt settings or increase sample size.'
+          text: t('agent.q.lowAccuracy')
         });
       }
       const highBias = results.find(r => Math.abs(r?.overallBiasScoreAmbiguous || 0) >= 0.5);
       if (highBias) {
         notes.push({
           level: 'warning',
-          text: 'High bias detected (s_amb ≥ 0.50). Inspect bias diagnostics and task-level scores.'
+          text: t('agent.q.highBias')
         });
       }
       const slowModel = results.find(r => (r?.averageResponseTime || 0) > 5000);
       if (slowModel) {
         notes.push({
           level: 'note',
-          text: `${slowModel.modelId.split(':')[0]} has high latency (>${(slowModel.averageResponseTime / 1000).toFixed(1)}s avg). Consider for production.`
+          text: t('agent.q.slow', { model: slowModel.modelId.split(':')[0], t: (slowModel.averageResponseTime / 1000).toFixed(1) })
         });
       }
     }
@@ -77,11 +78,11 @@ export const QualityAgent = {
       passed: !notes.some(n => n.level === 'warning'),
       findings: notes.length > 0 ? [{
         severity: notes.some(n => n.level === 'warning') ? 'warning' : 'info',
-        message: `${notes.length} quality insight${notes.length > 1 ? 's' : ''} available`,
+        message: t('agent.q.insights', { n: notes.length }),
         details: notes
       }] : [{
         severity: 'success',
-        message: 'All quality checks passed',
+        message: t('agent.q.allPassed'),
         details: []
       }]
     };
@@ -103,7 +104,7 @@ export const BiasExplanationAgent = {
       return {
         agentId: 'biasExplanation',
         passed: true,
-        findings: [{ severity: 'info', message: 'No results to analyze', details: [] }]
+        findings: [{ severity: 'info', message: t('agent.bias.noResults'), details: [] }]
       };
     }
     
@@ -114,7 +115,7 @@ export const BiasExplanationAgent = {
       passed: true,
       findings: [{
         severity: biasDetected ? 'warning' : 'success',
-        message: biasDetected ? 'Bias patterns detected in responses' : 'No significant bias patterns detected',
+        message: biasDetected ? t('agent.bias.detected') : t('agent.bias.none'),
         details: []
       }]
     };
@@ -136,7 +137,7 @@ export const DataIntegrityAgent = {
       return {
         agentId: 'dataIntegrity',
         passed: false,
-        findings: [{ severity: 'critical', message: 'No questions loaded', details: [] }]
+        findings: [{ severity: 'critical', message: t('agent.data.noQuestions'), details: [] }]
       };
     }
     
@@ -151,12 +152,12 @@ export const DataIntegrityAgent = {
     questionsToAnalyze.forEach((q, idx) => {
       const rowIssues = [];
       
-      if (!q.id) rowIssues.push('Missing ID');
-      if (!q.source) rowIssues.push('Missing source/category');
-      if (!q.questionText) rowIssues.push('Missing question text');
-      if (!q.options || q.options.length < 2) rowIssues.push('Missing or insufficient options');
-      if (!q.correctAnswer) rowIssues.push('Missing correct answer');
-      if (!q.contextType) rowIssues.push('Missing context type');
+      if (!q.id) rowIssues.push(t('agent.data.missingId'));
+      if (!q.source) rowIssues.push(t('agent.data.missingSource'));
+      if (!q.questionText) rowIssues.push(t('agent.data.missingQuestion'));
+      if (!q.options || q.options.length < 2) rowIssues.push(t('agent.data.missingOptions'));
+      if (!q.correctAnswer) rowIssues.push(t('agent.data.missingCorrect'));
+      if (!q.contextType) rowIssues.push(t('agent.data.missingContextType'));
       
       if (rowIssues.length > 0) {
         details.push({ questionIndex: idx, issues: rowIssues, question: q.questionText?.substring(0, 50) });
@@ -169,7 +170,7 @@ export const DataIntegrityAgent = {
     );
     if (duplicates.length > 0) {
       issues++;
-      details.push({ questionIndex: -1, issues: [`${duplicates.length} duplicate IDs found`], question: '' });
+      details.push({ questionIndex: -1, issues: [t('agent.data.duplicates', { n: duplicates.length })], question: '' });
     }
     
     return {
@@ -177,11 +178,11 @@ export const DataIntegrityAgent = {
       passed: issues === 0,
       findings: issues > 0 ? [{
         severity: issues > 10 ? 'critical' : issues > 5 ? 'warning' : 'info',
-        message: `Found ${issues} data quality issues`,
+        message: t('agent.data.issues', { n: issues }),
         details: details.slice(0, 20)
       }] : [{
         severity: 'success',
-        message: 'All data integrity checks passed',
+        message: t('agent.data.allPassed'),
         details: []
       }]
     };
@@ -203,7 +204,7 @@ export const FairnessDriftAgent = {
       return {
         agentId: 'fairnessDrift',
         passed: true,
-        findings: [{ severity: 'info', message: 'No current results to compare', details: [] }]
+        findings: [{ severity: 'info', message: t('agent.drift.noCurrent'), details: [] }]
       };
     }
     
@@ -211,7 +212,7 @@ export const FairnessDriftAgent = {
       return {
         agentId: 'fairnessDrift',
         passed: true,
-        findings: [{ severity: 'info', message: 'No previous results to compare (first run)', details: [] }]
+        findings: [{ severity: 'info', message: t('agent.drift.noPrevious'), details: [] }]
       };
     }
     
@@ -230,7 +231,7 @@ export const FairnessDriftAgent = {
           modelId: current.modelId,
           drift: drift.toFixed(1),
           severity: drift < -15 ? 'critical' : 'warning',
-          message: `Accuracy dropped by ${Math.abs(drift).toFixed(1)}%`
+          message: t('agent.drift.accDropped', { n: Math.abs(drift).toFixed(1) })
         });
       }
       
@@ -243,7 +244,7 @@ export const FairnessDriftAgent = {
           modelId: current.modelId,
           drift: `ambig: ${ambigDrift.toFixed(1)}%, disambig: ${disambigDrift.toFixed(1)}%`,
           severity: 'warning',
-          message: 'Context handling regression detected'
+          message: t('agent.drift.contextRegression')
         });
       }
       
@@ -256,10 +257,10 @@ export const FairnessDriftAgent = {
           regressions++;
           details.push({
             modelId: current.modelId,
-            task: TaskLabels[task] || task,
+            task: taskLabel(task),
             drift: taskDrift.toFixed(1),
             severity: 'warning',
-            message: `${TaskLabels[task] || task} accuracy dropped by ${Math.abs(taskDrift).toFixed(1)}%`
+            message: t('agent.drift.taskDropped', { task: taskLabel(task), n: Math.abs(taskDrift).toFixed(1) })
           });
         }
       });
@@ -270,11 +271,11 @@ export const FairnessDriftAgent = {
       passed: regressions === 0,
       findings: regressions > 0 ? [{
         severity: regressions > 5 ? 'critical' : 'warning',
-        message: `Detected ${regressions} fairness regressions`,
+        message: t('agent.drift.detected', { n: regressions }),
         details: details.slice(0, 15)
       }] : [{
         severity: 'success',
-        message: 'No fairness regressions detected',
+        message: t('agent.drift.none'),
         details: []
       }]
     };
@@ -296,7 +297,7 @@ export const PromptRobustnessAgent = {
       return {
         agentId: 'promptRobustness',
         passed: true,
-        findings: [{ severity: 'info', message: 'No results to analyze', details: [] }]
+        findings: [{ severity: 'info', message: t('agent.bias.noResults'), details: [] }]
       };
     }
     
@@ -314,7 +315,7 @@ export const PromptRobustnessAgent = {
           modelId: result.modelId,
           varianceRatio: varianceRatio.toFixed(2),
           severity: varianceRatio > 1 ? 'critical' : 'warning',
-          message: `High response time variance (${varianceRatio.toFixed(2)})`
+          message: t('agent.robust.variance', { n: varianceRatio.toFixed(2) })
         });
       }
       
@@ -325,7 +326,7 @@ export const PromptRobustnessAgent = {
           modelId: result.modelId,
           unansweredRate: (unansweredRate * 100).toFixed(1),
           severity: 'warning',
-          message: `High unanswered rate (${(unansweredRate * 100).toFixed(1)}%)`
+          message: t('agent.robust.unansweredRate', { n: (unansweredRate * 100).toFixed(1) })
         });
       }
       
@@ -335,7 +336,7 @@ export const PromptRobustnessAgent = {
           modelId: result.modelId,
           consistencyScore: result.consistencyScore.toFixed(2),
           severity: result.consistencyScore < 0.5 ? 'critical' : 'warning',
-          message: `Low answer consistency (${(result.consistencyScore * 100).toFixed(0)}%)`
+          message: t('agent.robust.consistency', { n: (result.consistencyScore * 100).toFixed(0) })
         });
       }
     });
@@ -345,11 +346,11 @@ export const PromptRobustnessAgent = {
       passed: unstableModels === 0,
       findings: unstableModels > 0 ? [{
         severity: unstableModels > 3 ? 'critical' : 'warning',
-        message: `${unstableModels} models show instability`,
+        message: t('agent.robust.instability', { n: unstableModels }),
         details: details.slice(0, 10)
       }] : [{
         severity: 'success',
-        message: 'All models show stable responses',
+        message: t('agent.robust.stable'),
         details: []
       }]
     };
@@ -371,7 +372,7 @@ export const AnswerConsistencyAgent = {
       return {
         agentId: 'answerConsistency',
         passed: true,
-        findings: [{ severity: 'info', message: 'No results to analyze', details: [] }]
+        findings: [{ severity: 'info', message: t('agent.bias.noResults'), details: [] }]
       };
     }
     
@@ -422,7 +423,7 @@ export const AnswerConsistencyAgent = {
                 source,
                 flipCount: uniqueAnswers.size,
                 severity: 'info',
-                message: `Inconsistent answers for similar questions in ${source}`
+                message: t('agent.consistency.inconsistent', { source })
               });
             }
           }
@@ -441,11 +442,11 @@ export const AnswerConsistencyAgent = {
       passed: inconsistentModels === 0,
       findings: inconsistentModels > 0 ? [{
         severity: inconsistentModels > 2 ? 'critical' : 'warning',
-        message: `${inconsistentModels} models show answer inconsistencies`,
+        message: t('agent.consistency.detected', { n: inconsistentModels }),
         details: details.slice(0, 15)
       }] : [{
         severity: 'success',
-        message: 'All models show consistent answers',
+        message: t('agent.consistency.allPassed'),
         details: []
       }]
     };
@@ -470,7 +471,7 @@ export const LatencyBudgetAgent = {
       return {
         agentId: 'latencyBudget',
         passed: true,
-        findings: [{ severity: 'info', message: 'No results to analyze', details: [] }]
+        findings: [{ severity: 'info', message: t('agent.bias.noResults'), details: [] }]
       };
     }
     
@@ -488,7 +489,7 @@ export const LatencyBudgetAgent = {
           avgTime: (avgTime / 1000).toFixed(2),
           threshold: (threshold / 1000).toFixed(1),
           severity: avgTime > threshold * 2 ? 'critical' : 'warning',
-          message: `Avg latency (${(avgTime / 1000).toFixed(2)}s) exceeds threshold (${(threshold / 1000).toFixed(1)}s)`
+          message: t('agent.latency.exceeds', { a: (avgTime / 1000).toFixed(2), b: (threshold / 1000).toFixed(1) })
         });
       }
       
@@ -499,7 +500,7 @@ export const LatencyBudgetAgent = {
           variance: variance.toFixed(0),
           threshold: varianceThreshold,
           severity: 'warning',
-          message: `High latency variance (${variance.toFixed(0)}ms)`
+          message: t('agent.latency.variance', { n: variance.toFixed(0) })
         });
       }
     });
@@ -509,11 +510,11 @@ export const LatencyBudgetAgent = {
       passed: violations === 0,
       findings: violations > 0 ? [{
         severity: violations > 3 ? 'critical' : 'warning',
-        message: `${violations} latency budget violations`,
+        message: t('agent.latency.violations', { n: violations }),
         details: details.slice(0, 10)
       }] : [{
         severity: 'success',
-        message: 'All models within latency budget',
+        message: t('agent.latency.within'),
         details: []
       }]
     };
@@ -536,34 +537,34 @@ export const ReportQAAgent = {
     
     if (!results || results.length === 0) {
       issues++;
-      findings.push({ severity: 'critical', area: 'results', message: 'No evaluation results present' });
+      findings.push({ severity: 'critical', area: 'results', message: t('agent.report.noResults') });
     } else {
       results.forEach((r, idx) => {
         if (r.correct === undefined) {
           issues++;
-          findings.push({ severity: 'warning', area: `model_${idx}`, message: 'Missing correct count' });
+          findings.push({ severity: 'warning', area: `model_${idx}`, message: t('agent.report.missingCorrect') });
         }
         if (r.accuracy?.overall === undefined) {
           issues++;
-          findings.push({ severity: 'warning', area: `model_${idx}`, message: 'Missing accuracy' });
+          findings.push({ severity: 'warning', area: `model_${idx}`, message: t('agent.report.missingAccuracy') });
         }
         if (!r.taskAccuracy || Object.keys(r.taskAccuracy).length === 0) {
           issues++;
-          findings.push({ severity: 'warning', area: `model_${idx}`, message: 'Missing task breakdown' });
+          findings.push({ severity: 'warning', area: `model_${idx}`, message: t('agent.report.missingTask') });
         }
       });
     }
     
     if (!insights) {
       issues++;
-      findings.push({ severity: 'warning', area: 'insights', message: 'No insights generated' });
+      findings.push({ severity: 'warning', area: 'insights', message: t('agent.report.noInsights') });
     } else {
       if (!insights.mostAccurate) issues++;
       if (!insights.fastestModel) issues++;
       if (!insights.accuracyRange) issues++;
       
       if (findings.filter(f => f.area === 'insights').length >= 3) {
-        findings.push({ severity: 'warning', area: 'insights', message: 'Insights incomplete' });
+        findings.push({ severity: 'warning', area: 'insights', message: t('agent.report.insightsIncomplete') });
       }
     }
     
@@ -572,11 +573,11 @@ export const ReportQAAgent = {
     
     if (!hasAccuracyChart) {
       issues++;
-      findings.push({ severity: 'warning', area: 'charts', message: 'Missing accuracy comparison chart' });
+      findings.push({ severity: 'warning', area: 'charts', message: t('agent.report.missingAccuracyChart') });
     }
     if (!hasTaskBreakdown) {
       issues++;
-      findings.push({ severity: 'warning', area: 'charts', message: 'Missing task breakdown chart' });
+      findings.push({ severity: 'warning', area: 'charts', message: t('agent.report.missingTaskChart') });
     }
     
     return {
@@ -584,11 +585,11 @@ export const ReportQAAgent = {
       passed: issues === 0,
       findings: issues > 0 ? [{
         severity: issues > 5 ? 'critical' : 'warning',
-        message: `Report has ${issues} completeness issues`,
+        message: t('agent.report.issues', { n: issues }),
         details: findings
       }] : [{
         severity: 'success',
-        message: 'Report is complete and ready for export',
+        message: t('agent.report.complete'),
         details: []
       }]
     };
@@ -666,7 +667,7 @@ export const runAllAgents = (questions, currentResults, previousResults, options
         return {
           agentId: agent.id,
           passed: false,
-          findings: [{ severity: 'error', message: `Agent failed: ${error.message}`, details: [] }]
+          findings: [{ severity: 'error', message: t('agent.failed', { e: error.message }), details: [] }]
         };
       }
     });

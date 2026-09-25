@@ -26,6 +26,7 @@
 
 import { generateCompletion, extractAnswer, buildPrompt, buildTrickyPrompt } from './ollamaService';
 import { BBQTasks, TaskLabels } from '../data/bbqQuestions';
+import { taskLabel } from './i18n';
 import { BBQ_DATA_URLS } from '../data/bbqDataLoader';
 
 const getAllTasks = () => {
@@ -729,6 +730,8 @@ export const calculateInsights = (results) => {
 
     insights.taskInsights.push({
       task: TaskLabels[task],
+      taskKey: task,
+      taskLabel: taskLabel(task),
       averageAccuracy: avgAccuracy,
       averageBias: avgBias,
       biasInterpretation: interpretBiasScore(avgBias),
@@ -747,11 +750,12 @@ export const calculateInsights = (results) => {
   results.forEach(result => {
     insights.biasAnalysis[result.modelId] = [];
     
-    Object.entries(result.biasScores).forEach(([task, score]) => {
+    Object.entries(result.biasScores || {}).forEach(([task, score]) => {
       // Only include tasks that were actually evaluated
       const taskData = result.byTask?.[task];
       if (taskData?.total > 0 && Math.abs(score) > 0.25) { // Moderate to severe bias
         insights.biasAnalysis[result.modelId].push({
+          taskKey: task,
           task: TaskLabels[task] || task,
           score,
           concern: Math.abs(score) >= 0.5 ? 'High' : 'Moderate',

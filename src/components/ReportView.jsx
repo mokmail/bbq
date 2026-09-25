@@ -12,8 +12,8 @@ import {
   Target,
   Shield,
 } from 'lucide-react';
+import { t, useLang, taskLabel } from '../services/i18n';
 import { calculateInsights } from '../services/evaluationEngine';
-import { TaskLabels } from '../data/bbqQuestions';
 import { buildReportHtml, reportFilename } from '../services/reportHtml';
 import {
   AccuracyComparisonChart,
@@ -46,6 +46,7 @@ const formatDate = (value) => {
 };
 
 const ReportView = ({ results }) => {
+  const lang = useLang();
   const [exporting, setExporting] = useState(false);
   const [exportNote, setExportNote] = useState('');
   const insights = useMemo(() => (results?.length ? calculateInsights(results) : null), [results]);
@@ -87,15 +88,12 @@ const ReportView = ({ results }) => {
   }, [sortedModels]);
   const taskBiasTable = useMemo(() => {
     if (!insights?.taskInsights || insights.taskInsights.length === 0) return [];
-    const taskSet = new Set(insights.taskInsights.map((t) => t.task));
-    return Array.from(taskSet).map((task) => {
-      const row = { task };
+    const taskSet = new Set(insights.taskInsights.map((t) => t.taskKey || t.task));
+    return Array.from(taskSet).map((taskKey) => {
+      const row = { task: taskLabel(taskKey) };
       sortedModels.forEach((result) => {
-        const taskKey = Object.keys(result.biasScoresAmbiguous || {}).find(
-          (key) => (TaskLabels[key] || key) === task
-        );
-        const amb = taskKey ? result.biasScoresAmbiguous?.[taskKey] ?? 0 : 0;
-        const dis = taskKey ? result.biasScoresDisambiguated?.[taskKey] ?? 0 : 0;
+        const amb = result.biasScoresAmbiguous?.[taskKey] ?? 0;
+        const dis = result.biasScoresDisambiguated?.[taskKey] ?? 0;
         row[result.modelId] = `${amb.toFixed(2)} / ${dis.toFixed(2)}`;
       });
       return row;
@@ -115,7 +113,7 @@ const ReportView = ({ results }) => {
     setExportNote('Building a self-contained HTML report…');
     try {
       await new Promise((resolve) => setTimeout(resolve, 0));
-      const html = buildReportHtml({ results, insights });
+      const html = buildReportHtml({ results, insights, lang });
       const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -128,7 +126,7 @@ const ReportView = ({ results }) => {
       // some browsers before it has started reading the blob.
       setTimeout(() => URL.revokeObjectURL(url), 10000);
       const kb = Math.max(1, Math.round(blob.size / 1024));
-      setExportNote(`Saved ${a.download} (${kb.toLocaleString()} KB) — offline-ready, open it with any browser.`);
+      setExportNote(`${t('report.exportNote')} (${kb.toLocaleString()} KB)`);
     } catch (error) {
       console.error('[Report] HTML export failed:', error);
       setExportNote(`Export failed: ${error.message}`);
@@ -142,10 +140,8 @@ const ReportView = ({ results }) => {
       <div className="report-empty">
         <FileText className="w-5 h-5" />
         <div>
-          <div className="report-empty-title">No report data yet</div>
-          <div className="report-empty-message">
-            Run an evaluation first to generate a shareable report.
-          </div>
+          <div className="report-empty-title">{t('report.noData')}</div>
+          <div className="report-empty-message">{t('report.noDataBody')}</div>
         </div>
       </div>
     );
@@ -157,8 +153,8 @@ const ReportView = ({ results }) => {
         <div className="report-title">
           <FileText className="w-6 h-6" />
           <div>
-            <h1>Kmail BBQ Benchmarking Report</h1>
-            <p>Share-ready summary of model evaluation results.</p>
+            <h1>{t('report.title')}</h1>
+            <p>{t('report.subtitle')}</p>
           </div>
         </div>
         <div className="report-actions">
@@ -166,14 +162,14 @@ const ReportView = ({ results }) => {
             className="report-export"
             onClick={handleExportHtml}
             disabled={exporting}
-            title="Download a single self-contained HTML file that opens offline"
+            title={t('report.exportTitle')}
           >
             <Download className="w-4 h-4" />
-            {exporting ? 'Building…' : 'Export HTML'}
+            {exporting ? t('report.building') : t('report.export')}
           </button>
           <button className="report-print" onClick={() => window.print()}>
             <Printer className="w-4 h-4" />
-            Print Report
+            {t('report.print')}
           </button>
           {exportNote && <span className="report-export-note">{exportNote}</span>}
         </div>
@@ -183,21 +179,21 @@ const ReportView = ({ results }) => {
         <div className="report-meta-card">
           <Calendar className="w-4 h-4" />
           <div>
-            <span className="report-meta-label">Generated</span>
+            <span className="report-meta-label">{t('report.generated')}</span>
             <span className="report-meta-value">{reportDate}</span>
           </div>
         </div>
         <div className="report-meta-card">
           <Users className="w-4 h-4" />
           <div>
-            <span className="report-meta-label">Models</span>
+            <span className="report-meta-label">{t('report.models')}</span>
             <span className="report-meta-value">{modelCount}</span>
           </div>
         </div>
         <div className="report-meta-card">
           <Database className="w-4 h-4" />
           <div>
-            <span className="report-meta-label">Questions</span>
+            <span className="report-meta-label">{t('report.questions')}</span>
             <span className="report-meta-value">{questionCount}</span>
           </div>
         </div>
@@ -206,21 +202,21 @@ const ReportView = ({ results }) => {
       <section className="report-section">
         <div className="report-section-title">
           <Shield className="w-4 h-4" />
-          Bias Risk Summary
+          {t('report.riskSummary')}
         </div>
         <div className="report-risk-grid">
           <div className="report-risk-card risk-low">
-            <div className="report-risk-label">Low Risk</div>
+            <div className="report-risk-label">{t('report.lowRisk')}</div>
             <div className="report-risk-value">{biasRiskCounts.low}</div>
             <div className="report-risk-meta">|s_amb| &lt; 0.25</div>
           </div>
           <div className="report-risk-card risk-moderate">
-            <div className="report-risk-label">Moderate Risk</div>
+            <div className="report-risk-label">{t('report.moderateRisk')}</div>
             <div className="report-risk-value">{biasRiskCounts.moderate}</div>
             <div className="report-risk-meta">0.25 to 0.49</div>
           </div>
           <div className="report-risk-card risk-high">
-            <div className="report-risk-label">High Risk</div>
+            <div className="report-risk-label">{t('report.highRisk')}</div>
             <div className="report-risk-value">{biasRiskCounts.high}</div>
             <div className="report-risk-meta">|s_amb| ≥ 0.50</div>
           </div>
@@ -230,24 +226,24 @@ const ReportView = ({ results }) => {
       <section className="report-section">
         <div className="report-section-title">
           <Target className="w-4 h-4" />
-          Methodology
+          {t('report.methodology')}
         </div>
         <div className="report-methodology">
           <div>
-            <div className="report-method-label">Benchmark</div>
-            <div className="report-method-value">BBQ Bias Benchmark (selected categories)</div>
+            <div className="report-method-label">{t('report.benchmark')}</div>
+            <div className="report-method-value">{t('report.benchmarkValue')}</div>
           </div>
           <div>
-            <div className="report-method-label">Evaluation Size</div>
-            <div className="report-method-value">{questionCount} questions</div>
+            <div className="report-method-label">{t('report.evalSize')}</div>
+            <div className="report-method-value">{t('report.nQuestions', { n: questionCount })}</div>
           </div>
           <div>
-            <div className="report-method-label">Models Evaluated</div>
-            <div className="report-method-value">{modelCount} models</div>
+            <div className="report-method-label">{t('report.modelsEvaluated')}</div>
+            <div className="report-method-value">{t('report.nModels', { n: modelCount })}</div>
           </div>
           <div>
-            <div className="report-method-label">Scoring</div>
-            <div className="report-method-value">Exact-match multiple choice accuracy</div>
+            <div className="report-method-label">{t('report.scoring')}</div>
+            <div className="report-method-value">{t('report.scoringValue')}</div>
           </div>
         </div>
       </section>
@@ -255,59 +251,57 @@ const ReportView = ({ results }) => {
       <section className="report-section">
         <div className="report-section-title">
           <Shield className="w-4 h-4" />
-          Key Findings
+          {t('report.findings')}
         </div>
         <div className="report-findings">
           <div className="report-finding">
-            <div className="report-finding-label">Top Performer</div>
+            <div className="report-finding-label">{t('report.topPerformer')}</div>
             <div className="report-finding-value">{bestModelName}</div>
-            <div className="report-finding-meta">Overall accuracy: {(insights?.mostAccurate?.accuracy || 0).toFixed(1)}% · fastest response: {((insights?.fastestModel?.avgTime || 0) / 1000).toFixed(2)}s</div>
+            <div className="report-finding-meta">{t('report.overallAccuracy')}: {(insights?.mostAccurate?.accuracy || 0).toFixed(1)}% · {t('report.fastestResponse')}: {((insights?.fastestModel?.avgTime || 0) / 1000).toFixed(2)}s</div>
           </div>
           <div className="report-finding">
-            <div className="report-finding-label">Accuracy Landscape</div>
+            <div className="report-finding-label">{t('report.accuracyLandscape')}</div>
             <div className="report-finding-value">
-              {accuracySpread.toFixed(1)}% spread
+              {accuracySpread.toFixed(1)}% {t('report.spread')}
             </div>
             <div className="report-finding-meta">
-              Median {medianAccuracy.toFixed(1)}% across {modelCount} models
+              {t('report.median')} {medianAccuracy.toFixed(1)}% {t('report.acrossModels', { n: modelCount })}
             </div>
           </div>
           <div className="report-finding">
-            <div className="report-finding-label">Most Challenging Tasks</div>
+            <div className="report-finding-label">{t('report.hardestTasks')}</div>
             <div className="report-finding-value">
-              {topTasks.length > 0 ? topTasks.map((task) => task.task).join(', ') : 'N/A'}
+              {topTasks.length > 0 ? topTasks.map((task) => taskLabel(task.task)).join(', ') : t('chart.na')}
             </div>
             <div className="report-finding-meta">
-              Lowest average accuracy across selected categories
+              {t('report.hardestNote')}
             </div>
           </div>
         </div>
         <p className="report-summary-text">
           {hasBiasFindings
-            ? 'Bias-related findings were detected and should be reviewed in the bias diagnostics below.'
-            : 'No significant bias concerns were detected for the selected categories.'}
-          {' '}Bias is reported for both ambiguous (s_amb) and disambiguated (s_dis) contexts: whether models make
-          stereotyped errors when the correct answer is available, and when context is insufficient.
+            ? t('report.biasFindings')
+            : t('report.noBiasFindings')}
+          {' '}{t('report.biasExplainer')}
         </p>
       </section>
 
       <section className="report-section">
         <div className="report-section-title">
           <ListChecks className="w-4 h-4" />
-          Model Summary Table
+          {t('report.summaryTable')}
         </div>
         <div className="report-table-wrapper">
           <table className="report-table">
             <thead>
               <tr>
-                <th>Model</th>
-                <th>Accuracy</th>
-                <th>Correct</th>
-                <th>Avg Latency</th>
+                <th>{t('report.model')}</th>
+                <th>{t('report.accuracy')}</th>
+                <th>{t('report.correct')}</th>
+                <th>{t('report.avgLatency')}</th>
                 <th>Bias s_amb</th>
                 <th>Bias s_dis</th>
-                <th>Risk Flag</th>
-              </tr>
+                <th>{t('report.risk')}</th>              </tr>
             </thead>
             <tbody>
               {sortedModels.map((result) => {
@@ -315,7 +309,8 @@ const ReportView = ({ results }) => {
                 const biasScoreAmb = result.overallBiasScoreAmbiguous || 0;
                 const biasScoreDis = result.overallBiasScoreDisambiguated || 0;
                 const biasScore = biasScoreAmb;
-                const risk = Math.abs(biasScore) >= 0.5 ? 'High' : Math.abs(biasScore) >= 0.25 ? 'Moderate' : 'Low';
+                const risk = Math.abs(biasScore) >= 0.5 ? t('report.highRisk') : Math.abs(biasScore) >= 0.25 ? t('report.moderateRisk') : t('report.lowRisk');
+                const riskClass = Math.abs(biasScore) >= 0.5 ? 'high' : Math.abs(biasScore) >= 0.25 ? 'moderate' : 'low';
                 return (
                   <tr key={result.modelId}>
                     <td>{result.modelId.split(':')[0]}</td>
@@ -324,7 +319,7 @@ const ReportView = ({ results }) => {
                     <td>{((result.averageResponseTime || 0) / 1000).toFixed(2)}s</td>
                     <td>{biasScoreAmb.toFixed(2)}</td>
                     <td>{biasScoreDis.toFixed(2)}</td>
-                    <td className={`risk-${risk.toLowerCase()}`}>{risk}</td>
+                    <td className={`risk-${riskClass}`}>{risk}</td>
                   </tr>
                 );
               })}
@@ -336,7 +331,7 @@ const ReportView = ({ results }) => {
       <section className="report-section">
         <div className="report-section-title">
           <BarChart3 className="w-4 h-4" />
-          Summary
+          {t('report.summary')}
         </div>
         <StatsSummary results={results} insights={insights} />
       </section>
@@ -344,7 +339,7 @@ const ReportView = ({ results }) => {
       <section className="report-section">
         <div className="report-section-title">
           <ListChecks className="w-4 h-4" />
-          Leaderboard
+          {t('report.leaderboard')}
         </div>
         <Leaderboard results={results} />
       </section>
@@ -352,10 +347,10 @@ const ReportView = ({ results }) => {
       <section className="report-section">
         <div className="report-section-title">
           <Activity className="w-4 h-4" />
-          Bias Scatter (s_amb vs s_dis)
+          {t('report.biasScatter')}
         </div>
         <p className="text-sm text-gray-500 mb-4" style={{ paddingLeft: '20px', paddingRight: '20px' }}>
-          Plots bias tendency in ambiguous contexts against disambiguated contexts. Ideal models cluster near the center (0,0), demonstrating zero bias regardless of evidence availability.
+          {t('report.scatterNote')}
         </p>
         <div className="report-chart-shell">
           <ResponsiveContainer width="100%" height={260}>
@@ -384,7 +379,7 @@ const ReportView = ({ results }) => {
       <section className="report-section">
         <div className="report-section-title">
           <Activity className="w-4 h-4" />
-          Core Performance
+          {t('report.corePerformance')}
         </div>
         <div className="report-grid">
           <AccuracyComparisonChart results={results} />
@@ -395,7 +390,7 @@ const ReportView = ({ results }) => {
       <section className="report-section">
         <div className="report-section-title">
           <Activity className="w-4 h-4" />
-          Bias Diagnostics
+          {t('report.biasDiagnostics')}
         </div>
         <div className="report-grid">
           <ContextImpactChart results={results} />
@@ -406,7 +401,7 @@ const ReportView = ({ results }) => {
       <section className="report-section">
         <div className="report-section-title">
           <BarChart3 className="w-4 h-4" />
-          Answer Distribution
+          {t('report.answerDistribution')}
         </div>
         <UnifiedAnswerDistribution results={results} />
       </section>
@@ -414,13 +409,13 @@ const ReportView = ({ results }) => {
       <section className="report-section">
         <div className="report-section-title">
           <ListChecks className="w-4 h-4" />
-          Task Bias Table (s_amb / s_dis)
+          {t('report.taskBiasTable')}
         </div>
         <div className="report-table-wrapper">
           <table className="report-table">
             <thead>
               <tr>
-                <th>Task</th>
+                <th>{t('report.task')}</th>
                 {sortedModels.map((model) => (
                   <th key={model.modelId}>{model.modelId.split(':')[0]}</th>
                 ))}
@@ -440,9 +435,7 @@ const ReportView = ({ results }) => {
         </div>
       </section>
 
-      <footer className="report-footer">
-        Generated by Kmail BBQ Benchmarking for sharing and print.
-      </footer>
+      <footer className="report-footer">{t('report.footer')}</footer>
     </div>
   );
 };

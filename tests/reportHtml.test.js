@@ -94,7 +94,7 @@ test('the export needs no network: no external scripts, stylesheets or imports',
 test('the export is a complete HTML document with inline styling', () => {
   const html = buildReportHtml({ results });
   assert.match(html, /^<!DOCTYPE html>/i);
-  assert.match(html, /<html lang="en">/);
+  assert.match(html, /<html lang="de">/);
   assert.match(html, /<meta charset="utf-8">/);
   assert.match(html, /<style>/);
   assert.match(html, /<\/html>\s*$/);
@@ -119,11 +119,11 @@ test('both bias scores, accuracy splits and alignment cost reach the report', ()
   assert.match(html, /50\.0%/, 'ambiguous accuracy missing');
   assert.match(html, /83\.3%/, 'disambiguated accuracy missing');
   // Alignment cost section.
-  assert.match(html, /Alignment cost/);
+  assert.match(html, /Alignment-Kosten/);
   assert.match(html, /\+0\.120/);
   // Per-category tables.
   assert.match(html, /Religion/);
-  assert.match(html, /Identity labels vs named individuals/);
+  assert.match(html, /Bezeichnungen vs\. genannte Personen/);
 });
 
 test('the methodology and the paper citation are included for a reader who did not run it', () => {
@@ -132,8 +132,8 @@ test('the methodology and the paper citation are included for a reader who did n
   assert.match(html, /s_dis/);
   assert.match(html, /s_amb/);
   assert.match(html, /unknown/i, 'must explain the unknown option');
-  assert.match(html, /[Mm]ethodology/);
-  assert.match(html, /How to read this report/);
+  assert.match(html, /Methodik/);
+  assert.match(html, /So lesen Sie diesen Bericht/);
 });
 
 test('untrusted model output is HTML-escaped', () => {
@@ -203,16 +203,16 @@ test('a stopped run with partial counts reports those counts honestly', () => {
     unanswered: 1,
     errors: 1,
   });
-  const html = buildReportHtml({ results: [partial] });
+  const html = buildReportHtml({ results: [partial], lang: 'en' });
   assert.match(html, /5/, 'answered count missing');
   assert.match(html, /Unanswered/);
   assert.match(html, /Request errors/);
 });
 
 test('the appendix shows incorrect and stereotyped answers first', () => {
-  const html = buildReportHtml({ results });
+  const html = buildReportHtml({ results, lang: 'en' });
   const firstQ = html.indexOf('Who is more likely to be a terrorist?');
-  const firstIncorrect = html.indexOf('picked the target');
+  const firstIncorrect = html.indexOf('picked target');
   assert.ok(firstIncorrect > 0, 'expected a stereotype-driven answer to be shown');
   assert.ok(firstQ > 0, 'expected question text in the appendix');
 });
@@ -232,7 +232,7 @@ test('maxQuestionsPerModel limits the appendix', () => {
       responseTime: 10,
     })),
   });
-  const html = buildReportHtml({ results: [many], options: { maxQuestionsPerModel: 5 } });
+  const html = buildReportHtml({ results: [many], lang: 'en', options: { maxQuestionsPerModel: 5 } });
   assert.match(html, /showing 5 of 50 answered questions/);
 });
 
@@ -261,7 +261,7 @@ test('the filename is timestamped and filesystem-safe', () => {
 test('the accuracy spread is computed from the results even without a precomputed insights object', () => {
   // Regression: the KPI tile read `insights.accuracyRange.spread` and fell back to 0,
   // so an export built without insights claimed a 0.0% spread for a 41.6-point range.
-  const html = buildReportHtml({ results }); // note: no `insights`
+  const html = buildReportHtml({ results, lang: 'en' }); // note: no `insights`
   const spreadRow = html.match(/Accuracy spread<\/small><strong>([^<]*)<\/strong>/);
   assert.ok(spreadRow, 'accuracy spread tile missing');
   assert.notEqual(spreadRow[1], '0.0%', 'spread was not derived from the results');
@@ -270,6 +270,7 @@ test('the accuracy spread is computed from the results even without a precompute
   // And an explicit insights object still wins when provided.
   const withInsights = buildReportHtml({
     results,
+    lang: 'en',
     insights: { accuracyRange: { spread: 12.5 } },
   });
   assert.match(withInsights, /Accuracy spread<\/small><strong>12\.5%/);
