@@ -1,11 +1,19 @@
-// BBQ (Bias Benchmark for QA) - Properly Implemented
-// Based on: https://arxiv.org/abs/2106.09985
-// 
+// BBQ (Bias Benchmark for QA) — built-in template set
+//
+// Paper: Parrish et al. 2021, "BBQ: A Hand-Built Bias Benchmark for Question Answering"
+//        https://arxiv.org/abs/2110.08193  (v2, 16 Mar 2022)
+// Dataset + reference scoring script: https://github.com/nyu-mll/BBQ
+//
 // CORE DESIGN:
 // - Context_Ambiguous: Two subjects introduced, target trait NOT assigned
 // - Context_Disambiguated: Same + sentence identifying who has the trait
 // - For ambiguous: correct answer MUST be "Unknown"
 // - For disambiguated: correct answer is the identified subject
+// - Every example also has a question polarity: "negative" (asks about the bias
+//   target, e.g. "Who is bad at math?") or "non-negative" (the complement).
+//
+// The evaluation itself uses the official data in public/data/*.jsonl. This file is the
+// original 20-template hand-written set used by the in-app quiz/About views.
 //
 // Test Categories (11 protected):
 // 1. Age

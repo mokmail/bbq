@@ -1,5 +1,12 @@
 // Local data files - loaded from public/data/ directory
 // This saves data consumption by avoiding external network requests
+import {
+  METADATA_URL,
+  indexMetadata,
+  metadataKey,
+  resolveOptionRoles,
+} from './bbqMetadata.js';
+
 export const BBQ_DATA_URLS = {
   Age: '/data/Age.jsonl',
   Gender_identity: '/data/Gender_identity.jsonl',
@@ -20,16 +27,24 @@ const CACHE_STORE_NAME = 'questions';
 const CACHE_META_STORE = 'metadata';
 const CACHE_KEY = 'bbq_questions';
 const CACHE_VERSION_KEY = 'bbq_cache_version';
-const CACHE_VERSION = 2; // Incremented to force refresh with corrected label mappings
+// v3: option roles (bias target / non-target / unknown) now come from the dataset
+// metadata (target_loc) instead of the hardcoded A/B/C assumptions of v2.
+const CACHE_VERSION = 3;
 
-// CRITICAL FIX: Labels must map to the correct option letter after reordering
-// Original BBQ data: label 0=ans0, label 1=ans1, label 2=ans2
-// But we reorder options as: A=ans2, B=ans0, C=ans1
-// So: label 0 -> B, label 1 -> C, label 2 -> A
-const LABEL_TO_LETTER = {
-  0: 'B',  // ans0 (first entity) is now option B
-  1: 'C',  // ans1 (second entity) is now option C
-  2: 'A',  // ans2 (unknown) is now option A
+/**
+ * Display order of the raw answer options.
+ *      A = ans2,  B = ans0,  C = ans1
+ * which is the order the original loader used. What changed in v3 is that the app no
+ * longer *assumes* which of those slots holds the bias target / the unknown answer —
+ * `resolveOptionRoles()` derives that per example from the dataset metadata.
+ */
+export const OPTION_ORDER = [2, 0, 1];
+
+const metadataState = {
+  index: null,
+  status: 'idle', // idle | loading | ready | unavailable
+  error: null,
+  promise: null, // in-flight load, shared by concurrent callers
 };
 
 /**
@@ -113,7 +128,7 @@ async function getCachedData() {
 /**
  * Save data to IndexedDB
  */
-async function saveCachedData(questions, categories) {
+async function saveCachedData(questions) {
   try {
     const db = await openCacheDB();
     
@@ -226,40 +241,96 @@ function parseLine(line) {
   }
 }
 
-function categorizeQuestion(item, source) {
+/**
+ * Load the official `additional_metadata.csv` once per page load.
+ * It carries `target_loc` (which raw answer option reflects the stereotype) plus
+ * `label_type`, the stereotyped groups and the bias-alignment flag.
+ */
+export async function loadBBQMetadata() {
+  if (metadataState.status === 'ready') return metadataState.index;
+  if (metadataState.status === 'loading') {
+    // Share the in-flight promise instead of polling on a timer. The old 20 ms
+    // sleep-loop burned time and, worse, could spin forever if the loader threw
+    // before resetting `status`.
+    return metadataState.promise;
+  }
+
+  metadataState.status = 'loading';
+  metadataState.promise = (async () => {
+    try {
+      const response = await fetch(METADATA_URL);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const text = await response.text();
+      metadataState.index = indexMetadata(text);
+      metadataState.status = 'ready';
+      console.log(`[BBQ] Loaded ${metadataState.index.count} metadata rows`);
+    } catch (error) {
+      metadataState.status = 'unavailable';
+      metadataState.error = error.message;
+      console.warn('[BBQ] Metadata unavailable, falling back to stereotyped_groups:', error.message);
+      metadataState.index = null;
+    }
+    return metadataState.index;
+  })();
+
+  return metadataState.promise;
+}
+
+export const getMetadataStatus = () => ({
+  status: metadataState.status,
+  error: metadataState.error,
+  rows: metadataState.index?.count || 0,
+});
+
+/**
+ * Convert one raw JSONL example into the app's question shape.
+ *
+ * The `targetOption` / `nonTargetOption` / `unknownOption` / `correctOption` fields
+ * are per-example now — see `bbqMetadata.js` for why the old hardcoded letters were
+ * wrong for ~67 % (unknown) and ~91 % (bias target) of the dataset.
+ */
+export function categorizeQuestion(item, source, metadataIndex = metadataState.index) {
   const isAmbiguous = item.context_condition === 'ambig';
   const isDisambiguated = item.context_condition === 'disambig';
-  
+
   if (!isAmbiguous && !isDisambiguated) return null;
-  
-  // BBQ data format:
-  // - ans0: First entity mentioned (typically stereotyped)
-  // - ans1: Second entity mentioned (typically non-stereotyped)  
-  // - ans2: Unknown/Cannot be determined
-  // We reorder to: A=ans2 (unknown), B=ans0 (first), C=ans1 (second)
-  
+
+  const metaRecord = metadataIndex?.byKey?.get(
+    metadataKey(item.category, item.question_index, item.example_id),
+  );
+
+  const roles = resolveOptionRoles(item, metaRecord, OPTION_ORDER);
+
+  // Keep the dataset's own option order but display it as A/B/C.
+  const rawKeys = ['ans0', 'ans1', 'ans2'];
+  const options = OPTION_ORDER.map((rawIndex, position) =>
+    `${['A', 'B', 'C'][position]}: ${item.answer_info[rawKeys[rawIndex]]?.[0] ?? ''}`,
+  );
+
   return {
     id: `${item.category.toLowerCase().replace(/[^a-z0-9]/g, '-')}-${item.example_id}`,
     category: item.category,
     source: source,
     task: source, // use source as task consistently
-    trait: item.question.toLowerCase().replace(/[^a-z]/g, '_').substring(0, 30),
+    trait: item.question?.toLowerCase().replace(/[^a-z]/g, '_').substring(0, 30),
     contextType: isAmbiguous ? 'ambiguous' : 'disambiguated',
     context: item.context,
     questionText: item.question,
-    options: [
-      `A: ${item.ans2}`,  // Unknown (as per BBQ paper: option A = Not known/Unknown)
-      `B: ${item.ans0}`,  // First entity (e.g., "The Black woman", "Shanice Jackson")
-      `C: ${item.ans1}`,  // Second entity (e.g., "The Black man", "Tanisha Dorsey")
-    ],
-    correctAnswer: LABEL_TO_LETTER[item.label],
-    // CRITICAL: Track which option represents what for bias calculation
-    stereotypedOption: 'B',      // ans0 (first entity) is typically stereotyped
-    nonStereotypedOption: 'C',   // ans1 (second entity) is typically non-stereotyped
-    unknownOption: 'A',          // ans2 is always unknown
+    options,
+    correctAnswer: roles.correctOption,
+    // Per-example option roles, resolved from the dataset metadata.
+    stereotypedOption: roles.targetOption,
+    nonStereotypedOption: roles.nonTargetOption,
+    unknownOption: roles.unknownOption,
+    targetLocation: roles.targetLocation,
+    targetSource: roles.targetSource,
+    roleSource: metaRecord ? 'metadata' : roles.targetSource,
+    labelType: roles.labelType,
     type: item.question_polarity === 'neg' ? 'negative' : 'non-negative',
     question_polarity: item.question_polarity,
     example_id: item.example_id,
+    question_index: item.question_index,
+    stereotypedGroups: item.additional_metadata?.stereotyped_groups || [],
   };
 }
 
@@ -271,80 +342,97 @@ function categorizeQuestion(item, source) {
  */
 export async function loadBBQData(options = {}) {
   const { forceRefresh = false, onProgress = null } = options;
-  
+
+  // The option-role metadata is what makes the bias score meaningful, so make sure
+  // it is loaded before any question is normalised.
+  const metadataIndex = await loadBBQMetadata();
+  if (!metadataIndex) {
+    console.warn(
+      '[BBQ] Scoring without additional_metadata.csv — target/unknown options fall back to ' +
+        'stereotyped_groups heuristics and bias scores will be approximate.',
+    );
+  }
+
   // Check cache first (unless force refresh)
   if (!forceRefresh) {
     console.log('[BBQ] Checking cache...');
     const cachedData = await getCachedData();
-    
+
     if (cachedData && cachedData.length > 0) {
       console.log(`[BBQ] Loaded ${cachedData.length} questions from cache`);
       return cachedData;
     }
   }
-  
+
   console.log('[BBQ] Loading local data files...');
-  
+
   const allQuestions = [];
   const categories = Object.keys(BBQ_DATA_URLS);
   let completedCategories = 0;
-  
-  for (const [category, url] of Object.entries(BBQ_DATA_URLS)) {
+
+  // Fetch all category files in parallel. They are independent ~1-13 MB static assets,
+  // and the previous sequential await left the browser idle on each round-trip in turn;
+  // on a cold cache that turned a few seconds of transfer into minutes. Parse and
+  // categorise in the same per-category task so results still append in a stable order
+  // once every file has been read.
+  const results = await Promise.all(categories.map(async (category) => {
+    const url = BBQ_DATA_URLS[category];
     try {
       if (onProgress) {
-        onProgress({
-          current: completedCategories + 1,
-          total: categories.length,
-          category,
-          status: 'fetching',
-        });
+        onProgress({ current: 0, total: categories.length, category, status: 'fetching' });
       }
-      
+
       const response = await fetch(url);
       if (!response.ok) {
         console.warn(`[BBQ] Failed to fetch ${category}: ${response.status}`);
         completedCategories++;
-        continue;
+        return [];
       }
-      
+
       const text = await response.text();
       const lines = text.split('\n').filter(line => line.trim());
-      
-      let categoryCount = 0;
+
+      const categoryQuestions = [];
       for (const line of lines) {
         const item = parseLine(line);
         if (!item) continue;
-        
-        const question = categorizeQuestion(item, category);
-        if (question) {
-          allQuestions.push(question);
-          categoryCount++;
-        }
+
+        const question = categorizeQuestion(item, category, metadataIndex);
+        if (question) categoryQuestions.push(question);
       }
-      
-      console.log(`[BBQ] Loaded ${categoryCount} questions from ${category}`);
+
+      console.log(`[BBQ] Loaded ${categoryQuestions.length} questions from ${category}`);
       completedCategories++;
-      
+
       if (onProgress) {
         onProgress({
           current: completedCategories,
           total: categories.length,
           category,
           status: 'complete',
-          count: categoryCount,
+          count: categoryQuestions.length,
         });
       }
-      
+
+      return categoryQuestions;
     } catch (error) {
       console.error(`[BBQ] Error loading ${category}:`, error);
       completedCategories++;
+      return [];
     }
-  }
+  }));
+
+  // Keep a deterministic order (Promise.all preserves input order) so the question
+  // plan and resume index stay stable across reloads. Append in a loop rather than
+  // spreading, which would pass tens of thousands of arguments at once.
+  results.forEach((categoryQuestions) => {
+    for (let i = 0; i < categoryQuestions.length; i++) allQuestions.push(categoryQuestions[i]);
+  });
   
   // Save to cache for future use
   if (allQuestions.length > 0) {
     console.log(`[BBQ] Saving ${allQuestions.length} questions to cache...`);
-    const saved = await saveCachedData(allQuestions, categories);
+    const saved = await saveCachedData(allQuestions);
     if (saved) {
       console.log(`[BBQ] Successfully cached ${allQuestions.length} questions`);
     } else {
@@ -367,11 +455,15 @@ export function getCategories() {
   return Object.keys(BBQ_DATA_URLS);
 }
 
-export default { 
-  loadBBQData, 
-  getQuestionsByContextType, 
-  getQuestionsByTask, 
+export default {
+  loadBBQData,
+  loadBBQMetadata,
+  getMetadataStatus,
+  categorizeQuestion,
+  OPTION_ORDER,
+  getQuestionsByContextType,
+  getQuestionsByTask,
   getCategories,
   getCacheStatus,
-  clearBBQCache 
+  clearBBQCache,
 };

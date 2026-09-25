@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # BBQ Benchmark App
   bbq-app:
@@ -8,7 +6,7 @@ services:
       dockerfile: Dockerfile
     container_name: bbq-benchmark-app
     ports:
-      - "3000:80"
+      - "3020:80"
     restart: unless-stopped
     environment:
       - NODE_ENV=production

@@ -4,7 +4,7 @@
  */
 
 import { TaskLabels } from '../data/bbqQuestions';
-import { calculateInsights, interpretBiasScore, generateComparison } from './evaluationEngine';
+import { calculateInsights, generateComparison } from './evaluationEngine';
 
 /**
  * Message types for chat
@@ -66,11 +66,11 @@ export const processUserQuery = (query) => {
   }
   
   if (lowerQuery.includes('bias') || lowerQuery.includes('fair')) {
-    return handleBiasQuery(insights, results);
+    return handleBiasQuery(insights);
   }
   
   if (lowerQuery.includes('accuracy') || lowerQuery.includes('score')) {
-    return handleAccuracyQuery(insights, results);
+    return handleAccuracyQuery(insights);
   }
   
   if (lowerQuery.includes('speed') || lowerQuery.includes('fast') || lowerQuery.includes('latency')) {
@@ -86,11 +86,11 @@ export const processUserQuery = (query) => {
   }
   
   if (lowerQuery.includes('recommend') || lowerQuery.includes('suggest') || lowerQuery.includes('advice')) {
-    return handleRecommendationQuery(insights, results);
+    return handleRecommendationQuery(insights);
   }
   
   if (lowerQuery.includes('improve') || lowerQuery.includes('better')) {
-    return handleImprovementQuery(insights, results);
+    return handleImprovementQuery();
   }
   
   if (lowerQuery.includes('summary') || lowerQuery.includes('overview')) {
@@ -118,7 +118,7 @@ export const processUserQuery = (query) => {
 /**
  * Handle queries about the best performing model
  */
-const handleBestModelQuery = (insights, results) => {
+const handleBestModelQuery = (insights) => {
   const bestModel = insights?.mostAccurate;
   const fastestModel = insights?.fastestModel;
   const leastBiased = insights?.leastBiased;
@@ -172,7 +172,7 @@ const handleWorstModelQuery = (insights, results) => {
 /**
  * Handle bias-related queries
  */
-const handleBiasQuery = (insights, results) => {
+const handleBiasQuery = (insights) => {
   const { biasRange, leastBiased, mostBiased } = insights || {};
   
   let content = "## Bias Analysis\n\n";
@@ -211,7 +211,7 @@ const handleBiasQuery = (insights, results) => {
 /**
  * Handle accuracy-related queries
  */
-const handleAccuracyQuery = (insights, results) => {
+const handleAccuracyQuery = (insights) => {
   const { accuracyRange, mostAccurate, taskInsights } = insights || {};
   
   let content = "## Accuracy Analysis\n\n";
@@ -381,7 +381,7 @@ const handleComparisonQuery = (comparison, results) => {
 /**
  * Handle recommendation queries
  */
-const handleRecommendationQuery = (insights, results) => {
+const handleRecommendationQuery = (insights) => {
   const { mostAccurate, leastBiased, fastestModel, taskInsights } = insights || {};
   
   let content = "## 🤖 Assistant Recommendations\n\n";
@@ -433,7 +433,7 @@ const handleRecommendationQuery = (insights, results) => {
 /**
  * Handle improvement queries
  */
-const handleImprovementQuery = (insights, results) => {
+const handleImprovementQuery = () => {
   let content = "## 📈 Improvement Suggestions\n\n";
   
   content += "### To Improve Accuracy:\n";

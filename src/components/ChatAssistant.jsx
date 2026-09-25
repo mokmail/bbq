@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Send, 
   X, 
@@ -18,38 +18,36 @@ import {
 } from '../services/chatAssistantService';
 import './ChatAssistant.css';
 
+
 const ChatAssistant = ({ results, isOpen, onToggle }) => {
-  const [messages, setMessages] = useState([]);
+  const [messages, setMessages] = useState(null); // null = use derived welcome state
   const [inputValue, setInputValue] = useState('');
   const [isMinimized, setIsMinimized] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
   const [suggestions, setSuggestions] = useState([]);
-  const messagesEndRef = useRef(null);
-  const inputRef = useRef(null);
+
+  setEvaluationContext(results);
+  const welcomeMessage = results?.length > 0 ? {
+    type: MessageTypes.ASSISTANT,
+    content: 'Hello! I am your BBQ evaluation assistant. I can help you understand the results from ' + results.length + ' model(s) that were evaluated.\n\nWhat would you like to know?',
+    suggestions: getSuggestedQuestions().slice(0, 4)
+  } : null;
+  const visibleMessages = messages || (welcomeMessage ? [welcomeMessage] : []);
+  const activeSuggestions = messages ? suggestions : (welcomeMessage?.suggestions || []);
 
   useEffect(() => {
-    if (results && results.length > 0) {
-      setEvaluationContext(results);
-      
-      if (messages.length === 0) {
-        const welcomeMessage = {
-          type: MessageTypes.ASSISTANT,
-          content: 'Hello! I am your BBQ evaluation assistant. I can help you understand the results from ' + results.length + ' model(s) that were evaluated.\n\nWhat would you like to know?',
-          suggestions: getSuggestedQuestions().slice(0, 4)
-        };
-        setMessages([welcomeMessage]);
-        setSuggestions(welcomeMessage.suggestions);
-      }
-    }
-  }, [results]);
-
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    // Autoscroll: find the message list in the DOM instead of holding a ref,
+    // which keeps ref access out of the render path.
+    const list = document.querySelector('.chat-messages');
+    if (list) list.scrollTop = list.scrollHeight;
   }, [messages]);
 
   useEffect(() => {
     if (isOpen && !isMinimized) {
-      setTimeout(() => inputRef.current?.focus(), 100);
+      setTimeout(() => {
+        const input = document.querySelector('.chat-input');
+        if (input) input.focus();
+      }, 100);
     }
   }, [isOpen, isMinimized]);
 
@@ -60,16 +58,16 @@ const ChatAssistant = ({ results, isOpen, onToggle }) => {
       type: MessageTypes.USER,
       content: text
     };
-    setMessages(prev => [...prev, userMessage]);
+    setMessages(prev => [...(prev || []), userMessage]);
     setInputValue('');
     setIsTyping(true);
 
     setTimeout(() => {
       const response = processUserQuery(text);
-      setMessages(prev => [...prev, response]);
+      setMessages(prev => [...(prev || []), response]);
       setSuggestions(response.suggestions || []);
       setIsTyping(false);
-    }, 500 + Math.random() * 500);
+    }, 750);
   };
 
   const handleKeyPress = (e) => {
@@ -84,17 +82,8 @@ const ChatAssistant = ({ results, isOpen, onToggle }) => {
   };
 
   const clearChat = () => {
-    setMessages([]);
+    setMessages(null);
     setSuggestions([]);
-    if (results?.length > 0) {
-      const welcomeMessage = {
-        type: MessageTypes.ASSISTANT,
-        content: 'Hello! I am your BBQ evaluation assistant. I can help you understand the results from ' + results.length + ' model(s) that were evaluated.\n\nWhat would you like to know?',
-        suggestions: getSuggestedQuestions().slice(0, 4)
-      };
-      setMessages([welcomeMessage]);
-      setSuggestions(welcomeMessage.suggestions);
-    }
   };
 
   const formatContent = (content) => {
@@ -175,7 +164,7 @@ const ChatAssistant = ({ results, isOpen, onToggle }) => {
                 )
               ) :
               React.createElement(React.Fragment, null,
-                messages.map((message, index) =>
+                visibleMessages.map((message, index) =>
                   React.createElement('div', {
                     key: index,
                     className: 'chat-message ' + (message.type === MessageTypes.USER ? 'user' : 'assistant')
@@ -201,12 +190,11 @@ const ChatAssistant = ({ results, isOpen, onToggle }) => {
                       React.createElement('span', null)
                     )
                   ),
-                React.createElement('div', { ref: messagesEndRef })
-              )
+                )
           ),
-          suggestions.length > 0 &&
+          activeSuggestions.length > 0 &&
             React.createElement('div', { className: 'chat-suggestions' },
-              suggestions.map((suggestion, index) =>
+              activeSuggestions.map((suggestion, index) =>
                 React.createElement('button', {
                   key: index,
                   className: 'chat-suggestion-chip',
@@ -217,7 +205,6 @@ const ChatAssistant = ({ results, isOpen, onToggle }) => {
           React.createElement('div', { className: 'chat-input-container' },
             React.createElement('div', { className: 'chat-input-wrapper' },
               React.createElement('input', {
-                ref: inputRef,
                 type: 'text',
                 className: 'chat-input',
                 placeholder: 'Ask about results, bias, recommendations...',

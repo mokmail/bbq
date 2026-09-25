@@ -25,27 +25,22 @@ import {
 import { TaskLabels } from '../data/bbqQuestions';
 
 const CHART_COLORS = [
-  '#3B82F6', // Blue
-  '#EF4444', // Red
-  '#22C55E', // Green
-  '#F59E0B', // Amber
-  '#0D9488', // Teal
-  '#EC4899', // Pink
-  '#14B8A6', // Teal
-  '#F97316', // Orange
-  '#334155', // Slate
-  '#84CC16', // Lime
+  '#22d3ee', // Cyan — brand signal
+  '#a78bfa', // Violet — models
+  '#4ade80', // Lime — verdict
+  '#fbbf24', // Amber — warning
+  '#2dd4bf', // Teal
+  '#f472b6', // Pink
+  '#60a5fa', // Blue
+  '#fb923c', // Orange
+  '#94a3b8', // Slate
+  '#a3e635', // Lime bright
 ];
 
 // Format milliseconds to readable time
 const formatTime = (ms) => {
   if (ms < 1000) return `${ms}ms`;
   return `${(ms / 1000).toFixed(2)}s`;
-};
-
-// Format percentage
-const formatPercent = (value) => {
-  return `${value.toFixed(1)}%`;
 };
 
 // Overall Accuracy Comparison Chart
@@ -68,10 +63,10 @@ const AccuracyComparisonChart = ({ results }) => {
       </p>
       <ResponsiveContainer width="100%" height={300}>
         <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+          <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,.16)" />
           <XAxis
             dataKey="name"
-            tick={{ fontSize: 12 }}
+            tick={{ fontSize: 13, fill: '#33415c' }}
             angle={-45}
             textAnchor="end"
             height={60}
@@ -82,9 +77,10 @@ const AccuracyComparisonChart = ({ results }) => {
           />
           <Tooltip
             formatter={(value) => [value + '%', 'Accuracy']}
-            contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb' }}
+            contentStyle={{ borderRadius: '8px', border: '1px solid rgba(22,35,58,.16)', background: '#fffdf8', color: '#33415c' }}
           />
-          <Bar dataKey="accuracy" name="Accuracy" fill="#3B82F6" radius={[4, 4, 0, 0]}>
+          <Bar dataKey="accuracy" name="Accuracy" fill="#22d3ee" radius={[6, 6, 0, 0]}
+            label={{ position: 'top', fontSize: 12.5, fontWeight: 600, fill: '#33415c', formatter: (v) => `${v}%` }}>
             {data.map((entry, index) => (
               <Cell
                 key={`cell-${index}`}
@@ -134,8 +130,8 @@ const TaskPerformanceRadar = ({ results }) => {
       </p>
       <ResponsiveContainer width="100%" height={350}>
         <RadarChart data={data}>
-          <PolarGrid stroke="#e5e7eb" />
-          <PolarAngleAxis dataKey="task" tick={{ fontSize: 11 }} />
+          <PolarGrid stroke="rgba(148,163,184,.16)" />
+          <PolarAngleAxis dataKey="task" tick={{ fontSize: 12.5, fill: '#33415c' }} />
           <PolarRadiusAxis
             angle={30}
             domain={[0, 100]}
@@ -154,7 +150,7 @@ const TaskPerformanceRadar = ({ results }) => {
           <Legend />
           <Tooltip
             formatter={(value) => value ? `${value}%` : 'N/A'}
-            contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb' }}
+            contentStyle={{ borderRadius: '8px', border: '1px solid rgba(22,35,58,.16)', background: '#fffdf8', color: '#33415c' }}
           />
         </RadarChart>
       </ResponsiveContainer>
@@ -169,8 +165,6 @@ const ResponseTimeChart = ({ results }) => {
     
     const times = results.map(r => r.averageResponseTime || 0).filter(t => t > 0);
     const medianTime = times.length > 0 ? times.sort((a, b) => a - b)[Math.floor(times.length / 2)] : 0;
-    const minTime = times.length > 0 ? Math.min(...times) : 0;
-    const maxTime = times.length > 0 ? Math.max(...times) : 0;
     
     return results.map(result => {
       const avgTime = result.averageResponseTime != null ? parseFloat(result.averageResponseTime.toFixed(0)) : 0;
@@ -246,9 +240,9 @@ const ResponseTimeChart = ({ results }) => {
       
       <ResponsiveContainer width="100%" height={Math.max(300, data.length * 50)}>
         <BarChart data={sortedData} layout="vertical" margin={{ top: 20, right: 30, left: 80, bottom: 20 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+          <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,.16)" />
           <XAxis type="number" tickFormatter={(value) => formatTime(value)} />
-          <YAxis dataKey="name" type="category" width={100} tick={{ fontSize: 11 }} />
+          <YAxis dataKey="name" type="category" width={100} tick={{ fontSize: 12.5, fill: '#33415c' }} />
           <Tooltip
             formatter={(value, name) => {
               if (name === 'avgTime') return [formatTime(value), 'Avg Response Time'];
@@ -257,9 +251,9 @@ const ResponseTimeChart = ({ results }) => {
               return [value, name];
             }}
             labelFormatter={(label, payload) => payload?.[0]?.payload?.fullName || label}
-            contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb' }}
+            contentStyle={{ borderRadius: '8px', border: '1px solid rgba(22,35,58,.16)', background: '#fffdf8', color: '#33415c' }}
           />
-          <ReferenceLine x={stats?.median || 0} stroke="#6B7280" strokeDasharray="5 5" label={{ value: 'Median', position: 'top', fontSize: 10, fill: '#6B7280' }} />
+          <ReferenceLine x={stats?.median || 0} stroke="#5b6b85" strokeDasharray="5 5" label={{ value: 'Median', position: 'top', fontSize: 12, fill: '#5b6b85' }} />
           <Bar dataKey="avgTime" name="Avg Response Time" radius={[0, 4, 4, 0]}>
             {sortedData.map((entry, index) => (
               <Cell key={`cell-${index}`} fill={entry.color} />
@@ -308,16 +302,16 @@ const ContextImpactChart = ({ results }) => {
       </p>
       <ResponsiveContainer width="100%" height={300}>
         <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 50 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-          <XAxis dataKey="name" tick={{ fontSize: 11 }} angle={-45} textAnchor="end" />
+          <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,.16)" />
+          <XAxis dataKey="name" tick={{ fontSize: 12.5, fill: '#33415c' }} angle={-45} textAnchor="end" />
           <YAxis domain={[0, 100]} tickFormatter={(value) => `${value}%`} />
           <Tooltip
             formatter={(value) => `${value}%`}
-            contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb' }}
+            contentStyle={{ borderRadius: '8px', border: '1px solid rgba(22,35,58,.16)', background: '#fffdf8', color: '#33415c' }}
           />
           <Legend />
-          <Bar dataKey="withContext" name="With Context" fill="#22C55E" radius={[4, 4, 0, 0]} />
-          <Bar dataKey="withoutContext" name="Without Context" fill="#F59E0B" radius={[4, 4, 0, 0]} />
+          <Bar dataKey="withContext" name="With Context" fill="#4ade80" radius={[4, 4, 0, 0]} />
+          <Bar dataKey="withoutContext" name="Without Context" fill="#fbbf24" radius={[4, 4, 0, 0]} />
         </BarChart>
       </ResponsiveContainer>
     </div>
@@ -342,16 +336,16 @@ const BiasScoreComparisonChart = ({ results }) => {
       </p>
       <ResponsiveContainer width="100%" height={300}>
         <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 50 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-          <XAxis dataKey="name" tick={{ fontSize: 11 }} angle={-45} textAnchor="end" />
+          <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,.16)" />
+          <XAxis dataKey="name" tick={{ fontSize: 12.5, fill: '#33415c' }} angle={-45} textAnchor="end" />
           <YAxis domain={[-1, 1]} tickFormatter={(value) => value.toFixed(1)} />
           <Tooltip
             formatter={(value, name) => [value.toFixed(2), name === 'sAmb' ? 's_amb' : 's_dis']}
-            contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb' }}
+            contentStyle={{ borderRadius: '8px', border: '1px solid rgba(22,35,58,.16)', background: '#fffdf8', color: '#33415c' }}
           />
           <Legend />
-          <Bar dataKey="sAmb" name="s_amb" fill="#0ea5e9" radius={[4, 4, 0, 0]} />
-          <Bar dataKey="sDis" name="s_dis" fill="#22c55e" radius={[4, 4, 0, 0]} />
+          <Bar dataKey="sAmb" name="s_amb" fill="#22d3ee" radius={[4, 4, 0, 0]} />
+          <Bar dataKey="sDis" name="s_dis" fill="#a78bfa" radius={[4, 4, 0, 0]} />
         </BarChart>
       </ResponsiveContainer>
     </div>
@@ -376,7 +370,7 @@ const AccuracyLatencyScatter = ({ results }) => {
       </p>
       <ResponsiveContainer width="100%" height={300}>
         <ScatterChart margin={{ top: 20, right: 30, left: 20, bottom: 50 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+          <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,.16)" />
           <XAxis type="number" dataKey="accuracy" domain={[0, 100]} tickFormatter={(v) => `${v}%`} />
           <YAxis type="number" dataKey="latency" tickFormatter={(v) => formatTime(v)} />
           <Tooltip
@@ -386,9 +380,9 @@ const AccuracyLatencyScatter = ({ results }) => {
               return [value, name];
             }}
             labelFormatter={(label, payload) => payload?.[0]?.payload?.model || ''}
-            contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb' }}
+            contentStyle={{ borderRadius: '8px', border: '1px solid rgba(22,35,58,.16)', background: '#fffdf8', color: '#33415c' }}
           />
-          <Scatter data={data} fill="#334155" />
+          <Scatter data={data} fill="#a78bfa" />
         </ScatterChart>
       </ResponsiveContainer>
     </div>
@@ -432,12 +426,12 @@ const TaskBreakdownChart = ({ results }) => {
       </p>
       <ResponsiveContainer width="100%" height={400}>
         <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 100 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-          <XAxis dataKey="task" tick={{ fontSize: 10 }} angle={-45} textAnchor="end" height={80} />
+          <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,.16)" />
+          <XAxis dataKey="task" tick={{ fontSize: 12, fill: '#33415c' }} angle={-45} textAnchor="end" height={80} />
           <YAxis domain={[0, 100]} tickFormatter={(value) => `${value}%`} />
           <Tooltip
             formatter={(value, name) => [value ? `${value}%` : 'N/A', name]}
-            contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb' }}
+            contentStyle={{ borderRadius: '8px', border: '1px solid rgba(22,35,58,.16)', background: '#fffdf8', color: '#33415c' }}
           />
           <Legend wrapperStyle={{ fontSize: '12px' }} />
           {keys.map((key, index) => (
@@ -458,8 +452,8 @@ const BiasScoreTooltip = ({ active, payload, label }) => {
   if (active && payload && payload.length) {
     return (
       <div style={{
-        background: '#fff',
-        border: '1px solid #e5e7eb',
+        background: '#fffdf8',
+        border: '1px solid rgba(22,35,58,.16)', color: '#33415c',
         borderRadius: '8px',
         padding: '12px',
         boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
@@ -532,10 +526,10 @@ const BiasScoreChart = ({ results }) => {
       </div>
       <ResponsiveContainer width="100%" height={400}>
         <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 100 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-          <XAxis dataKey="task" tick={{ fontSize: 10 }} angle={-45} textAnchor="end" height={80} />
+          <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,.16)" />
+          <XAxis dataKey="task" tick={{ fontSize: 12, fill: '#33415c' }} angle={-45} textAnchor="end" height={80} />
           <YAxis domain={[-1, 1]} tickFormatter={(value) => `${value > 0 ? '+' : ''}${value}`} />
-          <ReferenceLine y={0} stroke="#666" strokeDasharray="3 3" />
+          <ReferenceLine y={0} stroke="#94a3b8" strokeDasharray="3 3" />
           <Tooltip content={<BiasScoreTooltip />} />
           <Legend wrapperStyle={{ fontSize: '12px' }} />
           {keys.map((key, index) => (
@@ -556,8 +550,8 @@ const BiasCategoryTooltip = ({ active, payload, label }) => {
   if (active && payload && payload.length) {
     return (
       <div style={{
-        background: 'white',
-        border: '1px solid #e5e7eb',
+        background: '#fffdf8',
+        border: '1px solid rgba(22,35,58,.16)', color: '#33415c',
         borderRadius: '8px',
         padding: '12px',
         boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
@@ -625,12 +619,12 @@ const BiasByCategoryChart = ({ results }) => {
       </p>
       <ResponsiveContainer width="100%" height={400}>
         <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 100 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-          <XAxis dataKey="task" tick={{ fontSize: 10 }} angle={-45} textAnchor="end" height={80} />
+          <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,.16)" />
+          <XAxis dataKey="task" tick={{ fontSize: 12, fill: '#33415c' }} angle={-45} textAnchor="end" height={80} />
           <YAxis domain={[-1, 1]} tickFormatter={(value) => value.toFixed(1)} />
-          <ReferenceLine y={0} stroke="#374151" strokeDasharray="2 2" />
-          <ReferenceLine y={0.25} stroke="#F97316" strokeDasharray="3 3" strokeOpacity={0.5} label={{ value: 'Moderate', position: 'right', fontSize: 10, fill: '#F97316' }} />
-          <ReferenceLine y={-0.25} stroke="#3B82F6" strokeDasharray="3 3" strokeOpacity={0.5} label={{ value: 'Counter', position: 'right', fontSize: 10, fill: '#3B82F6' }} />
+          <ReferenceLine y={0} stroke="#64748b" strokeDasharray="2 2" />
+          <ReferenceLine y={0.25} stroke="#b45309" strokeDasharray="3 3" strokeOpacity={0.5} label={{ value: 'Moderate', position: 'right', fontSize: 12, fill: '#b45309' }} />
+          <ReferenceLine y={-0.25} stroke="#1d4ed8" strokeDasharray="3 3" strokeOpacity={0.5} label={{ value: 'Counter', position: 'right', fontSize: 12, fill: '#1d4ed8' }} />
           <Tooltip content={<BiasCategoryTooltip />} />
           <Legend wrapperStyle={{ fontSize: '12px' }} />
           {keys.map((key, index) => (
@@ -1002,94 +996,6 @@ const QuestionResultsTable = ({ results, enableBiasAgent = true }) => {
   );
 };
 
-const ModelOpinionPanel = ({ results }) => {
-  if (!results || results.length === 0) return null;
-
-  const getTaskExtremes = (taskAccuracy) => {
-    const entries = Object.entries(taskAccuracy || {});
-    if (entries.length === 0) return { best: [], worst: [] };
-    const sorted = entries.sort((a, b) => b[1] - a[1]);
-    return {
-      best: sorted.slice(0, 2),
-      worst: sorted.slice(-2).reverse(),
-    };
-  };
-
-  return (
-    <div className="chart-container">
-      <h3 className="chart-title">Model Quality & Bias Opinion</h3>
-      <p className="text-sm text-gray-500 mb-4" style={{ paddingLeft: '20px', paddingRight: '20px' }}>
-        Automated synthetic review detailing the concrete strengths and weaknesses derived statistically from each model's benchmark answers.
-      </p>
-      <div className="model-opinion-grid">
-        {results.map((result) => {
-          const accuracy = result.accuracy?.overall || 0;
-          const biasAmb = result.overallBiasScoreAmbiguous || 0;
-          const biasDis = result.overallBiasScoreDisambiguated || 0;
-          const { best, worst } = getTaskExtremes(result.taskAccuracy);
-          const strengths = [];
-          if (accuracy >= 75) strengths.push('High overall accuracy');
-          if ((result.averageResponseTime || 0) < 1500) strengths.push('Fast response time');
-          if (Math.abs(biasAmb) < 0.25) strengths.push('Low ambiguous bias');
-          const weaknesses = [];
-          if (accuracy < 60) weaknesses.push('Lower overall accuracy');
-          if (Math.abs(biasAmb) >= 0.5) weaknesses.push('High ambiguous bias');
-          if (Math.abs(biasDis) >= 0.5) weaknesses.push('High disambiguated bias');
-
-          return (
-            <div key={result.modelId} className="model-opinion-card">
-              <div className="model-opinion-header">
-                <div className="model-opinion-title">
-                  <strong>{result.modelId.split(':')[0]}</strong>
-                  <span className="agent-icon bias-agent">BX</span>
-                </div>
-                <span className="model-opinion-score">{accuracy.toFixed(1)}%</span>
-              </div>
-              <div className="model-opinion-section">
-                <span className="model-opinion-label">Strengths</span>
-                <ul>
-                  {(strengths.length ? strengths : ['No clear strengths identified yet']).map((item) => (
-                    <li key={item}>{item}</li>
-                  ))}
-                </ul>
-              </div>
-              <div className="model-opinion-section">
-                <span className="model-opinion-label">Weaknesses</span>
-                <ul>
-                  {(weaknesses.length ? weaknesses : ['No major weaknesses detected']).map((item) => (
-                    <li key={item}>{item}</li>
-                  ))}
-                </ul>
-              </div>
-              <div className="model-opinion-section">
-                <span className="model-opinion-label">Task Performance</span>
-                <div className="model-opinion-tasks">
-                  <div>
-                    <span className="model-opinion-sub">Best</span>
-                    {best.length > 0 ? best.map(([task, value]) => (
-                      <div key={task}>{TaskLabels[task] || task}: {value.toFixed(1)}%</div>
-                    )) : <div>N/A</div>}
-                  </div>
-                  <div>
-                    <span className="model-opinion-sub">Needs Work</span>
-                    {worst.length > 0 ? worst.map(([task, value]) => (
-                      <div key={task}>{TaskLabels[task] || task}: {value.toFixed(1)}%</div>
-                    )) : <div>N/A</div>}
-                  </div>
-                </div>
-              </div>
-              <div className="model-opinion-footer">
-                Bias s_amb: {biasAmb.toFixed(2)} | Bias s_dis: {biasDis.toFixed(2)}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-};
-
-// Statistics Summary Cards
 const StatsSummary = ({ results }) => {
   if (!results || results.length === 0) return null;
 
@@ -1213,14 +1119,6 @@ const InsightsPanel = ({ insights }) => {
   );
 };
 
-// Model Selector Component Data
-const getModelOptions = (availableModels) => {
-  return availableModels.map(m => ({
-    value: m.id,
-    label: `${m.name} (${m.parameters})`,
-    details: m,
-  }));
-};
 
 export {
   AccuracyComparisonChart,
@@ -1235,12 +1133,9 @@ export {
   UnifiedAnswerDistribution,
   Leaderboard,
   QuestionResultsTable,
-  ModelOpinionPanel,
   StatsSummary,
   InsightsPanel,
-  getModelOptions,
   formatTime,
-  formatPercent,
   CHART_COLORS
 };
 

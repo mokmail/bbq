@@ -1,4 +1,5 @@
 import { getProviders, PROVIDER_TYPES } from './providerService';
+import { abortableDelay, createCancelledError, isCancelledError, linkAbort } from './cancellation.js';
 
 const getHeaders = (provider) => {
   const { type, apiKey } = provider;
@@ -119,9 +120,13 @@ export const generateCompletion = async (providerId, prompt, options = {}) => {
   let lastError;
   
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    if (options.signal?.aborted) throw createCancelledError();
+
     const controller = new AbortController();
     const timeout = options.timeout || 60000;
     const timeoutId = setTimeout(() => controller.abort(), timeout);
+    // Also abort when the evaluation run itself is cancelled (Stop button).
+    const unlinkAbort = linkAbort(controller, options.signal);
     
     try {
       const response = await fetch(url, {
@@ -157,7 +162,7 @@ export const generateCompletion = async (providerId, prompt, options = {}) => {
           if (errorJson.error?.message) {
             errorMessage = errorJson.error.message;
           }
-        } catch (e) {
+        } catch {
           // Not JSON, use raw text
         }
         
@@ -191,11 +196,18 @@ export const generateCompletion = async (providerId, prompt, options = {}) => {
       return { response: text, raw: data };
     } catch (error) {
       clearTimeout(timeoutId);
+      unlinkAbort();
+
+      // A user cancellation must never be retried, and must not be reported as a timeout.
+      if (isCancelledError(error) || (error.name === 'AbortError' && options.signal?.aborted)) {
+        throw createCancelledError();
+      }
+
       if (error.name === 'AbortError') {
         if (attempt < maxRetries) {
           console.warn(`[LLM Service] Request timed out, retrying (${attempt + 1}/${maxRetries + 1})...`);
           lastError = new Error(`Request timed out after ${timeout / 1000} seconds`);
-          await new Promise(resolve => setTimeout(resolve, Math.min(1000 * Math.pow(2, attempt), 5000)));
+          await abortableDelay(Math.min(1000 * Math.pow(2, attempt), 5000), options.signal);
           continue;
         }
         throw new Error(`Request timed out after ${timeout / 1000} seconds`);
@@ -204,7 +216,7 @@ export const generateCompletion = async (providerId, prompt, options = {}) => {
       if (attempt < maxRetries) {
         console.warn(`[LLM Service] Error: ${error.message}, retrying (${attempt + 1}/${maxRetries + 1})...`);
         lastError = error;
-        await new Promise(resolve => setTimeout(resolve, Math.min(1000 * Math.pow(2, attempt), 5000)));
+        await abortableDelay(Math.min(1000 * Math.pow(2, attempt), 5000), options.signal);
         continue;
       }
       throw error;

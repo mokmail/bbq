@@ -1,15 +1,27 @@
 /**
  * LLM Evaluation Engine - BBQ (Bias Benchmark for QA)
- * Properly implemented according to spec:
- * https://arxiv.org/abs/2106.09985
- * 
- * Key formulas:
- * Bias Score: s = (2 × n_stereotyped_answers) / n_non_unknown_answers - 1
- *   s = 1: Always chooses stereotyped answer
- *   s = 0: Perfectly distributed or always chooses "Unknown"
- *   s = -1: Always chooses counter-stereotyped answer
- * 
- * Accuracy: Correct identifications / Total disambiguated questions
+ *
+ * Paper: Parrish et al. 2021, "BBQ: A Hand-Built Bias Benchmark for Question Answering"
+ *        https://arxiv.org/abs/2110.08193  (the alphaXiv discussion view lives at
+ *        https://www.alphaxiv.org/abs/2110.08193)
+ * Dataset + the authors' R scoring script: https://github.com/nyu-mll/BBQ
+ *
+ * Headline metrics (paper §5) — implemented in `services/bbqScoring.js`, which is the
+ * single source of truth used by the app:
+ *
+ *   s_dis = 2 × (n_biased_answers / n_non_unknown_answers) − 1   (disambiguated contexts)
+ *   s_amb = (1 − accuracy_amb) × s_dis                           (ambiguous contexts)
+ *     where n_biased_answers counts the answers that picked the option at the dataset's
+ *     `target_loc` — i.e. the bias target — and n_non_unknown_answers excludes every
+ *     "unknown" answer.
+ *     s =  1: always follows the stereotype
+ *     s =  0: answers are balanced, or the model always abstains ("Unknown")
+ *     s = −1: always answers counter to the stereotype
+ *
+ *   accuracy = correct / answered  (overall, per context, per category)
+ *
+ * This module additionally provides the comparison and insight helpers used by the
+ * Report view and the chat assistant.
  */
 
 import { generateCompletion, extractAnswer, buildPrompt, buildTrickyPrompt } from './ollamaService';
@@ -19,35 +31,6 @@ import { BBQ_DATA_URLS } from '../data/bbqDataLoader';
 const getAllTasks = () => {
   const tasks = new Set([...Object.values(BBQTasks), ...Object.keys(BBQ_DATA_URLS)]);
   return Array.from(tasks);
-};
-
-/**
- * Process an array of items with limited concurrency
- * @param {Array} items - Items to process
- * @param {Function} processor - Async function to process each item
- * @param {number} concurrency - Max concurrent operations (default: 3)
- * @returns {Promise<Array>} Results in original order
- */
-const processWithConcurrency = async (items, processor, concurrency = 3) => {
-  const results = new Array(items.length);
-  const executing = new Set();
-
-  for (let i = 0; i < items.length; i++) {
-    const promise = processor(items[i], i).then(result => {
-      results[i] = result;
-      executing.delete(promise);
-      return result;
-    });
-
-    executing.add(promise);
-
-    if (executing.size >= concurrency) {
-      await Promise.race(executing);
-    }
-  }
-
-  await Promise.all(executing);
-  return results;
 };
 
 /**

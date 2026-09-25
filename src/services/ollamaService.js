@@ -196,10 +196,10 @@ export const extractAnswer = (response, options) => {
   // Strategy 1: Look for letter in brackets, parentheses, or quotes at the start or end
   // e.g., "[A]", "(B)", "'C'", "Answer: A", "The answer is: B"
   const bracketPatterns = [
-    /^(?:the\s+)?answer\s*(?:is)?[:\s]+['"\[\(]?([abc])['"\]\)]?/i,
-    /(?:^|\s)['"\[\(]?([abc])['"\]\)]?(?:\s*[.!?]?\s*$)/i,
-    /\boption\s*['"\[\(]?([abc])['"\]\)]?\b/i,
-    /\bchoice\s*['"\[\(]?([abc])['"\]\)]?\b/i,
+    /^(?:the\s+)?answer\s*(?:is)?[:\s]+['"[(]?([abc])['"\])]?/i,
+    /(?:^|\s)['"[(]?([abc])['"\])]?(?:\s*[.!?]?\s*$)/i,
+    /\boption\s*['"[(]?([abc])['"\])]?\b/i,
+    /\bchoice\s*['"[(]?([abc])['"\])]?\b/i,
   ];
 
   for (const pattern of bracketPatterns) {
@@ -215,7 +215,7 @@ export const extractAnswer = (response, options) => {
   if (firstCharMatch) {
     // Make sure it's not part of a word
     const afterLetter = normalizedResponse.slice(firstCharMatch[0].length).trim();
-    if (!afterLetter.length || afterLetter[0].match(/[\s.!,?;:\-]/)) {
+    if (!afterLetter.length || afterLetter[0].match(/[\s.!,?;:-]/)) {
       const letter = firstCharMatch[1].toUpperCase();
       if (['A', 'B', 'C'].includes(letter)) return letter;
     }
@@ -230,9 +230,9 @@ export const extractAnswer = (response, options) => {
 
   // Strategy 4: Look for "the answer is X" or "answer: X" patterns
   const answerPatterns = [
-    /(?:the\s+)?answer\s+is\s+['"\[\(]?([abc])['"\]\)]?/i,
-    /answer[:\s]+['"\[\(]?([abc])['"\]\)]?/i,
-    /^(?:final\s+)?answer[:\s]*['"\[\(]?([abc])['"\]\)]?/im,
+    /(?:the\s+)?answer\s+is\s+['"[(]?([abc])['"\])]?/i,
+    /answer[:\s]+['"[(]?([abc])['"\])]?/i,
+    /^(?:final\s+)?answer[:\s]*['"[(]?([abc])['"\])]?/im,
   ];
 
   for (const pattern of answerPatterns) {
@@ -249,7 +249,7 @@ export const extractAnswer = (response, options) => {
     const optionTexts = options.map((opt, idx) => {
       const letter = ['A', 'B', 'C'][idx];
       // Extract text after the prefix (e.g., "A: text" -> "text")
-      const textMatch = opt && opt.match(/^[A-Ca-c][\s:\.\-\)]*\s*(.+)$/i);
+      const textMatch = opt && opt.match(/^[A-Ca-c][\s:.\-)]*\s*(.+)$/i);
       const text = textMatch ? textMatch[1].toLowerCase().trim() : (opt || '').toLowerCase().trim();
       return { letter, text };
     });
@@ -300,7 +300,7 @@ export const extractAnswer = (response, options) => {
 const extractOptionText = (option) => {
   if (!option) return '';
   // Match pattern: letter + separator + text (e.g., "A: The text", "B. Option")
-  const match = option.match(/^[A-Ca-c][\s:\.\-\)]*\s*(.+)$/i);
+  const match = option.match(/^[A-Ca-c][\s:.\-)]*\s*(.+)$/i);
   return match ? match[1].trim() : option.trim();
 };
 

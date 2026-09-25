@@ -2,20 +2,19 @@ import React, { useMemo, useState } from 'react';
 import {
   FileText,
   Printer,
+  Download,
   Calendar,
   Database,
   Users,
   BarChart3,
   Activity,
   ListChecks,
-  Sparkles,
   Target,
   Shield,
-  MessageCircle
 } from 'lucide-react';
-import ChatAssistant from './ChatAssistant';
 import { calculateInsights } from '../services/evaluationEngine';
 import { TaskLabels } from '../data/bbqQuestions';
+import { buildReportHtml, reportFilename } from '../services/reportHtml';
 import {
   AccuracyComparisonChart,
   ResponseTimeChart,
@@ -47,13 +46,13 @@ const formatDate = (value) => {
 };
 
 const ReportView = ({ results }) => {
-  const [chatOpen, setChatOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [exportNote, setExportNote] = useState('');
   const insights = useMemo(() => (results?.length ? calculateInsights(results) : null), [results]);
   const reportDate = formatDate();
   const modelCount = results?.length || 0;
   const questionCount = results?.[0]?.totalQuestions || 0;
   const bestModelName = insights?.mostAccurate?.modelId?.split(':')[0] || 'N/A';
-  const fastestModelName = insights?.fastestModel?.modelId?.split(':')[0] || 'N/A';
   const accuracySpread = insights?.accuracyRange?.spread ?? 0;
   const topTasks = (insights?.taskInsights || []).slice(0, 3);
   const hasBiasFindings = insights && Object.values(insights.biasAnalysis || {}).some((arr) => arr.length > 0);
@@ -66,12 +65,7 @@ const ReportView = ({ results }) => {
     const mid = Math.floor(values.length / 2);
     return values.length % 2 === 0 ? (values[mid - 1] + values[mid]) / 2 : values[mid];
   }, [sortedModels]);
-  const medianLatency = useMemo(() => {
-    const values = sortedModels.map((r) => r.averageResponseTime || 0).sort((a, b) => a - b);
-    if (values.length === 0) return 0;
-    const mid = Math.floor(values.length / 2);
-    return values.length % 2 === 0 ? (values[mid - 1] + values[mid]) / 2 : values[mid];
-  }, [sortedModels]);
+
   const biasRiskCounts = useMemo(() => {
     return sortedModels.reduce(
       (acc, result) => {
@@ -108,6 +102,41 @@ const ReportView = ({ results }) => {
     });
   }, [insights, sortedModels]);
 
+  /**
+   * Build a self-contained HTML report and download it.
+   *
+   * The generator is synchronous string building over data already in memory, so the
+   * only real cost is serialising the blob. Yielding once before the heavy work lets the
+   * button paint its "building" state instead of the click appearing to do nothing.
+   */
+  const handleExportHtml = async () => {
+    if (exporting) return;
+    setExporting(true);
+    setExportNote('Building a self-contained HTML report…');
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      const html = buildReportHtml({ results, insights });
+      const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = reportFilename();
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      // Revoke on the next tick: revoking synchronously can cancel the download in
+      // some browsers before it has started reading the blob.
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+      const kb = Math.max(1, Math.round(blob.size / 1024));
+      setExportNote(`Saved ${a.download} (${kb.toLocaleString()} KB) — offline-ready, open it with any browser.`);
+    } catch (error) {
+      console.error('[Report] HTML export failed:', error);
+      setExportNote(`Export failed: ${error.message}`);
+    } finally {
+      setExporting(false);
+    }
+  };
+
   if (!results || results.length === 0) {
     return (
       <div className="report-empty">
@@ -132,10 +161,22 @@ const ReportView = ({ results }) => {
             <p>Share-ready summary of model evaluation results.</p>
           </div>
         </div>
-        <button className="report-print" onClick={() => window.print()}>
-          <Printer className="w-4 h-4" />
-          Print Report
-        </button>
+        <div className="report-actions">
+          <button
+            className="report-export"
+            onClick={handleExportHtml}
+            disabled={exporting}
+            title="Download a single self-contained HTML file that opens offline"
+          >
+            <Download className="w-4 h-4" />
+            {exporting ? 'Building…' : 'Export HTML'}
+          </button>
+          <button className="report-print" onClick={() => window.print()}>
+            <Printer className="w-4 h-4" />
+            Print Report
+          </button>
+          {exportNote && <span className="report-export-note">{exportNote}</span>}
+        </div>
       </header>
 
       <section className="report-meta">
@@ -188,43 +229,6 @@ const ReportView = ({ results }) => {
 
       <section className="report-section">
         <div className="report-section-title">
-          <Sparkles className="w-4 h-4" />
-          Executive Summary
-        </div>
-        <div className="report-summary">
-          <div className="report-summary-card">
-            <div className="report-summary-label">Top Performer</div>
-            <div className="report-summary-value">{bestModelName}</div>
-            <div className="report-summary-meta">
-              Accuracy: {(insights?.mostAccurate?.accuracy || 0).toFixed(1)}%
-            </div>
-          </div>
-          <div className="report-summary-card">
-            <div className="report-summary-label">Fastest Model</div>
-            <div className="report-summary-value">{fastestModelName}</div>
-            <div className="report-summary-meta">
-              Avg latency: {((insights?.fastestModel?.avgTime || 0) / 1000).toFixed(2)}s
-            </div>
-          </div>
-          <div className="report-summary-card">
-            <div className="report-summary-label">Accuracy Spread</div>
-            <div className="report-summary-value">{accuracySpread.toFixed(1)}%</div>
-            <div className="report-summary-meta">Across {modelCount} models</div>
-          </div>
-        </div>
-        <p className="report-summary-text">
-          This report summarizes model performance on the BBQ benchmark. The best overall model was
-          <strong> {bestModelName}</strong> with an overall accuracy of
-          <strong> {(insights?.mostAccurate?.accuracy || 0).toFixed(1)}%</strong>.
-          The fastest model was <strong>{fastestModelName}</strong>.
-          {hasBiasFindings
-            ? ' Bias-related findings were detected and should be reviewed in the diagnostics section.'
-            : ' No significant bias concerns were detected for the selected categories.'}
-        </p>
-      </section>
-
-      <section className="report-section">
-        <div className="report-section-title">
           <Target className="w-4 h-4" />
           Methodology
         </div>
@@ -257,12 +261,16 @@ const ReportView = ({ results }) => {
           <div className="report-finding">
             <div className="report-finding-label">Top Performer</div>
             <div className="report-finding-value">{bestModelName}</div>
-            <div className="report-finding-meta">Overall accuracy: {(insights?.mostAccurate?.accuracy || 0).toFixed(1)}%</div>
+            <div className="report-finding-meta">Overall accuracy: {(insights?.mostAccurate?.accuracy || 0).toFixed(1)}% · fastest response: {((insights?.fastestModel?.avgTime || 0) / 1000).toFixed(2)}s</div>
           </div>
           <div className="report-finding">
-            <div className="report-finding-label">Fastest Response</div>
-            <div className="report-finding-value">{fastestModelName}</div>
-            <div className="report-finding-meta">Avg latency: {((insights?.fastestModel?.avgTime || 0) / 1000).toFixed(2)}s</div>
+            <div className="report-finding-label">Accuracy Landscape</div>
+            <div className="report-finding-value">
+              {accuracySpread.toFixed(1)}% spread
+            </div>
+            <div className="report-finding-meta">
+              Median {medianAccuracy.toFixed(1)}% across {modelCount} models
+            </div>
           </div>
           <div className="report-finding">
             <div className="report-finding-label">Most Challenging Tasks</div>
@@ -274,33 +282,13 @@ const ReportView = ({ results }) => {
             </div>
           </div>
         </div>
-      </section>
-
-      <section className="report-section">
-        <div className="report-section-title">
-          <Sparkles className="w-4 h-4" />
-          AI Commentary
-        </div>
-        <div className="report-ai-text">
-          <p>
-            The evaluation covered <strong>{modelCount}</strong> models and <strong>{questionCount}</strong> questions.
-            Overall accuracy spans <strong>{accuracySpread.toFixed(1)}%</strong> with a median of
-            <strong> {medianAccuracy.toFixed(1)}%</strong>. Typical response latency is
-            <strong> {((medianLatency || 0) / 1000).toFixed(2)}s</strong>. The strongest model is
-            <strong> {bestModelName}</strong>, while the fastest is <strong>{fastestModelName}</strong>.
-          </p>
-          <p>
-            {hasBiasFindings
-              ? 'Bias flags were detected in specific categories; prioritize review of models with higher positive bias scores.'
-              : 'Bias analysis did not surface significant concerns in the selected categories.'}
-            Focus improvement efforts on the most challenging tasks: {topTasks.length > 0 ? topTasks.map((task) => task.task).join(', ') : 'N/A'}.
-          </p>
-          <p>
-            Bias reporting is shown for both ambiguous (s_amb) and disambiguated (s_dis) cases,
-            highlighting whether models make stereotyped errors when the correct answer is available
-            and when context is insufficient.
-          </p>
-        </div>
+        <p className="report-summary-text">
+          {hasBiasFindings
+            ? 'Bias-related findings were detected and should be reviewed in the bias diagnostics below.'
+            : 'No significant bias concerns were detected for the selected categories.'}
+          {' '}Bias is reported for both ambiguous (s_amb) and disambiguated (s_dis) contexts: whether models make
+          stereotyped errors when the correct answer is available, and when context is insufficient.
+        </p>
       </section>
 
       <section className="report-section">
@@ -455,13 +443,6 @@ const ReportView = ({ results }) => {
       <footer className="report-footer">
         Generated by Kmail BBQ Benchmarking for sharing and print.
       </footer>
-
-      {/* Chat Assistant */}
-      <ChatAssistant 
-        results={results} 
-        isOpen={chatOpen} 
-        onToggle={() => setChatOpen(!chatOpen)} 
-      />
     </div>
   );
 };

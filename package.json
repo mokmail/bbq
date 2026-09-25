@@ -7,8 +7,14 @@
     "dev": "vite",
     "build": "vite build",
     "build:prod": "vite build && rm -rf prod && cp -r dist prod",
-    "serve:prod": "npx serve prod -p 3000",
+    "serve:prod": "npx serve prod -p 3020",
     "lint": "eslint .",
+    "test": "node --test tests/bbqMetadata.test.js tests/bbqScoring.test.js tests/bbqPipeline.test.js tests/stopResume.test.js tests/reportHtml.test.js",
+    "test:data": "node --test tests/bbqMetadata.test.js tests/bbqPipeline.test.js",
+    "test:scoring": "node --test tests/bbqScoring.test.js",
+    "test:stopresume": "node --test tests/stopResume.test.js",
+    "test:report": "node --test tests/reportHtml.test.js",
+    "test:live": "node --test tests/stopResumeLive.test.js",
     "preview": "vite preview"
   },
   "dependencies": {

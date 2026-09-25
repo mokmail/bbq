@@ -653,8 +653,8 @@ export const runAllAgents = (questions, currentResults, previousResults, options
             result = { agentId: agent.id, passed: true, findings: [] };
         }
         
-        // Log slow agents (dev only)
-        if (process.env.NODE_ENV === 'development') {
+        // Log slow agents
+        {
           const duration = performance.now() - start;
           if (duration > 50) {
             console.log(`Agent ${agent.id} took ${duration.toFixed(0)}ms`);
